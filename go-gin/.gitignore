@@ -1,0 +1,7 @@
+/.github
+*.exe
+/tmp
+/vendor
+/storage/logs/*
+/logs
+.env

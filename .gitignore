@@ -1,0 +1,62 @@
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Node / Frontend
+node_modules/
+.pnpm-store/
+.bun/
+.cache/
+.temp/
+dist/
+build/
+coverage/
+.vite/
+.vitest/
+.eslintcache
+.stylelintcache
+.husky/_/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/
+.idea/
+*.iml
+
+# Go
+bin/
+build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/vendor/
+
+# Go tools
+.coverage/
+.gocache/
+.air/
+
+# OS Executables in project
+**/dlyt/dlyt-server-linux
+
+# Misc
+*.orig
+*.merge_file_*

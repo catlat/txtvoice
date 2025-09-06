@@ -1,0 +1,66 @@
+package httpx
+
+import (
+	"context"
+	"errors"
+	"go-gin/internal/component/logx"
+	"io"
+
+	"github.com/gin-gonic/gin/binding"
+)
+
+// LogicHandler 处理请求的逻辑接口
+type LogicHandler[Req any, Resp any] interface {
+	Handle(ctx context.Context, req Req) (Resp, error)
+}
+
+// ShouldBindHandle 处理请求
+func ShouldBindHandle[Req any, Resp any](c *Context, logicHandler LogicHandler[Req, Resp]) (Resp, error) {
+	b := binding.Default(c.Request.Method, c.ContentType())
+	return ShouldBindWithHandle(c, logicHandler, b)
+}
+
+// ShouldBindJSONHandle 处理请求
+func ShouldBindJSONHandle[Req any, Resp any](c *Context, logicHandler LogicHandler[Req, Resp]) (Resp, error) {
+	return ShouldBindWithHandle(c, logicHandler, binding.JSON)
+}
+
+// ShouldBindQueryHandle 处理请求
+func ShouldBindQueryHandle[Req any, Resp any](ctx *Context, logicHandler LogicHandler[Req, Resp]) (Resp, error) {
+	return ShouldBindWithHandle(ctx, logicHandler, binding.Query)
+}
+
+// ShouldBindHeaderHandle 处理请求
+func ShouldBindHeaderHandle[Req any, Resp any](ctx *Context, logicHandler LogicHandler[Req, Resp]) (Resp, error) {
+	return ShouldBindWithHandle(ctx, logicHandler, binding.Header)
+}
+
+// ShouldBindUriHandle 处理请求
+func ShouldBindUriHandle[Req any, Resp any](ctx *Context, logicHandler LogicHandler[Req, Resp]) (Resp, error) {
+	var req Req
+	var resp Resp
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		if errors.Is(err, io.EOF) {
+			logx.WithContext(ctx).Warn("ShouldBindUri异常", "io.EOF错误")
+			return resp, err
+		}
+		logx.WithContext(ctx).Warn("ShouldBindUri异常", err)
+		return resp, err
+	}
+	return logicHandler.Handle(ctx, req)
+}
+
+// ShouldBindWithHandle 处理请求
+func ShouldBindWithHandle[Req any, Resp any](ctx *Context, logicHandler LogicHandler[Req, Resp], b binding.Binding) (Resp, error) {
+	var req Req
+	var resp Resp
+	if err := ctx.ShouldBindWith(&req, b); err != nil {
+		if errors.Is(err, io.EOF) {
+			logx.WithContext(ctx).Warn("ShouldBind异常", "io.EOF错误")
+			return resp, err
+		}
+		logx.WithContext(ctx).Warn("ShouldBind异常", err.Error())
+		return resp, err
+	}
+	return logicHandler.Handle(ctx, req)
+}
