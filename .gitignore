@@ -60,3 +60,7 @@ build/
 # Misc
 *.orig
 *.merge_file_*
+
+# Media outputs (do not commit downloaded videos/images)
+/go-gin/public/yt/audio/
+/go-gin/public/yt/thumb/
