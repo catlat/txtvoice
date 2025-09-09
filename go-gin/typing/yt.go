@@ -22,8 +22,5 @@ type YtTextReq struct {
 }
 
 type YtTextReply struct {
-	OriginalText   string `json:"original_text"`
 	TranslatedText string `json:"translated_text"`
-	AudioData      string `json:"audio_data"`
-	AudioType      string `json:"audio_type"` // 音频文件类型，如：mp3, m4a, wav, aac, ogg, flac
 }

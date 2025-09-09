@@ -34,10 +34,10 @@
               <VideoCard
                 :thumbnail="v.thumbnail || v.thumbnail_url || ''"
                 :title="v.title || ''"
-                :author="v.author || v.channel || ''"
+                :author="v.channel_title || v.author || v.channel || ''"
                 :views="v.views ? `${v.views} 次观看` : ''"
                 :publishedAt="v.published_at || ''"
-                :duration="v.duration || ''"
+                :durationSec="v.duration_sec"
                 @fetch="goDetail(v)"
                 class="cursor-pointer hover:shadow-md transition-shadow duration-200"
               />
@@ -152,7 +152,8 @@ export default defineComponent({
       this.loading = true; this.error = ''
       try {
         const res = await historyApi.listVideos({ page: this.page, size: this.size })
-        this.items = (res && (res.items || res.data || [])) || []
+        const data = (res && res.data) || {}
+        this.items = (Array.isArray(data.items) ? data.items : (Array.isArray(res && res.items) ? res.items : []))
       } catch (e) { this.error = e && e.message ? e.message : '加载失败' }
       finally { this.loading = false }
     },
