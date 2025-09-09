@@ -11,6 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"go-gin/internal/component/redisx"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // Info 代表我们关心的 YouTube 基本信息
@@ -33,11 +37,15 @@ type ytDlpJSON struct {
 	Duration   float64 `json:"duration"` // 支持小数秒
 	ViewCount  int64   `json:"view_count"`
 	UploadDate string  `json:"upload_date"`
+	Timestamp  int64   `json:"timestamp"` // 时间戳，适用于Bilibili
+	// YouTube的缩略图数组
 	Thumbnails []struct {
 		URL    string `json:"url"`
 		Width  int    `json:"width"`
 		Height int    `json:"height"`
 	} `json:"thumbnails"`
+	// Bilibili的单个缩略图
+	Thumbnail string `json:"thumbnail"`
 }
 
 func getBin() string {
@@ -47,23 +55,54 @@ func getBin() string {
 	return "yt-dlp"
 }
 
-func getCookies() string { return strings.TrimSpace(os.Getenv("YTDL_COOKIES_FILE")) }
-func getProxy() string   { return strings.TrimSpace(os.Getenv("YTDL_PROXY")) }
+// getCookies 从Redis中获取指定平台的cookie文件路径
+func getCookies(ctx context.Context, platform string) string {
+	if platform == "" {
+		platform = "youtube" // 默认平台
+	}
+
+	redisKey := fmt.Sprintf("ytdl:cookies:%s", platform)
+	cookiePath, err := redisx.Client().Get(ctx, redisKey).Result()
+	if err == redis.Nil {
+		// key不存在，返回空字符串
+		return ""
+	} else if err != nil {
+		log.Printf("ytdl: failed to get cookies from redis for platform %s: %v", platform, err)
+		return ""
+	}
+
+	cookiePath = strings.TrimSpace(cookiePath)
+	if cookiePath != "" {
+		log.Printf("ytdl: using cookies for platform %s: %s", platform, cookiePath)
+	}
+	return cookiePath
+}
+
+func getProxy() string { return strings.TrimSpace(os.Getenv("YTDL_PROXY")) }
 
 func getAudioFormat() string {
 	if f := strings.TrimSpace(os.Getenv("YTDL_AUDIO_FORMAT")); f != "" {
 		return f
 	}
-	return "bestaudio[abr<=64]/worstaudio/bestaudio[abr<=96]/bestaudio"
+	// 优化为最低质量音频，适合语音识别
+	return "worstaudio/bestaudio[abr<=32]/bestaudio[abr<=64]/bestaudio"
 }
 
 // FetchInfo 使用 yt-dlp 获取视频信息（本地执行，不依赖外部服务）
 func FetchInfo(ctx context.Context, idOrURL string) (*Info, error) {
+	return FetchInfoWithPlatform(ctx, idOrURL, "")
+}
+
+// FetchInfoWithPlatform 使用指定平台的cookie获取视频信息
+func FetchInfoWithPlatform(ctx context.Context, idOrURL, platform string) (*Info, error) {
 	bin := getBin()
 	args := []string{"-J", "--no-playlist"}
-	if c := getCookies(); c != "" {
+
+	// 从Redis读取平台的cookie文件路径
+	if c := getCookies(ctx, platform); c != "" {
 		args = append(args, "--cookies", c)
 	}
+
 	args = append(args, idOrURL)
 	cctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
@@ -80,28 +119,63 @@ func FetchInfo(ctx context.Context, idOrURL string) (*Info, error) {
 	if author == "" {
 		author = data.Channel
 	}
-	bestURL := ""
-	bestArea := 0
-	log.Printf("ytdl: thumbnails count=%d", len(data.Thumbnails))
-	for _, t := range data.Thumbnails {
-		area := t.Width * t.Height
-		if area > bestArea {
-			bestArea = area
-			bestURL = t.URL
+
+	// 处理缩略图：优先使用Bilibili的thumbnail字段，否则使用thumbnails数组
+	var thumbnailURL string
+	if data.Thumbnail != "" {
+		// Bilibili 单个缩略图
+		thumbnailURL = data.Thumbnail
+		log.Printf("ytdl: using single thumbnail url=%s", thumbnailURL)
+	} else {
+		// YouTube 缩略图数组，选择最大分辨率的
+		bestArea := 0
+		log.Printf("ytdl: thumbnails count=%d", len(data.Thumbnails))
+		for _, t := range data.Thumbnails {
+			area := t.Width * t.Height
+			if area > bestArea {
+				bestArea = area
+				thumbnailURL = t.URL
+			}
 		}
+		log.Printf("ytdl: chosen thumb area=%d url=%s", bestArea, thumbnailURL)
 	}
-	log.Printf("ytdl: chosen thumb area=%d url=%s", bestArea, bestURL)
-	return &Info{Id: data.ID, Title: data.Title, Author: author, DurationSec: int(data.Duration), Views: data.ViewCount, PublishDate: data.UploadDate, ThumbnailUrl: bestURL}, nil
+
+	// 处理发布日期：优先使用upload_date，如果没有则使用timestamp转换
+	publishDate := data.UploadDate
+	if publishDate == "" && data.Timestamp > 0 {
+		// 将timestamp转换为YYYYMMDD格式
+		t := time.Unix(data.Timestamp, 0)
+		publishDate = t.Format("20060102")
+		log.Printf("ytdl: converted timestamp %d to date %s", data.Timestamp, publishDate)
+	}
+
+	return &Info{
+		Id:           data.ID,
+		Title:        data.Title,
+		Author:       author,
+		DurationSec:  int(data.Duration),
+		Views:        data.ViewCount,
+		PublishDate:  publishDate,
+		ThumbnailUrl: thumbnailURL,
+	}, nil
 }
 
 // GetBestAudioURL 使用 yt-dlp 获取音频直链
 func GetBestAudioURL(ctx context.Context, idOrURL string) (string, error) {
+	return GetBestAudioURLWithPlatform(ctx, idOrURL, "")
+}
+
+// GetBestAudioURLWithPlatform 使用指定平台的cookie获取音频直链
+func GetBestAudioURLWithPlatform(ctx context.Context, idOrURL, platform string) (string, error) {
 	bin := getBin()
 	format := getAudioFormat()
 	args := []string{"-f", format, "-g", "--no-playlist"}
-	if c := getCookies(); c != "" {
+
+	// 从Redis读取平台的cookie文件路径
+	if c := getCookies(ctx, platform); c != "" {
 		args = append(args, "--cookies", c)
 	}
+
 	args = append(args, idOrURL)
 	log.Printf("ytdl: using audio format: %s", format)
 	cctx, cancel := context.WithTimeout(ctx, 45*time.Second)
@@ -121,13 +195,21 @@ func GetBestAudioURL(ctx context.Context, idOrURL string) (string, error) {
 // DownloadAudioTo 直接下载音频到本地文件（不转码）
 // outBase: 目标基础路径（不含扩展名），函数内部使用 .%(ext)s 模板并返回最终文件路径
 func DownloadAudioTo(ctx context.Context, idOrURL, outBase string) (string, error) {
+	return DownloadAudioToWithPlatform(ctx, idOrURL, outBase, "")
+}
+
+// DownloadAudioToWithPlatform 使用指定平台的cookie下载音频到本地文件
+func DownloadAudioToWithPlatform(ctx context.Context, idOrURL, outBase, platform string) (string, error) {
 	bin := getBin()
 	format := getAudioFormat()
 	outTemplate := outBase + ".%(ext)s"
 	args := []string{"-f", format, "--no-playlist", "-o", outTemplate}
-	if c := getCookies(); c != "" {
+
+	// 从Redis读取平台的cookie文件路径
+	if c := getCookies(ctx, platform); c != "" {
 		args = append(args, "--cookies", c)
 	}
+
 	if p := getProxy(); p != "" {
 		args = append(args, "--proxy", p)
 	}

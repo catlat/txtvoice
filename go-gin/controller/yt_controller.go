@@ -24,7 +24,7 @@ func (c *ytController) Info(ctx *httpx.Context) (any, error) {
 	if err := validators.Validate(&req); err != nil {
 		return nil, err
 	}
-	return dlyt.Svc.Info(ctx, req.IdOrUrl)
+	return dlyt.Svc.InfoWithPlatform(ctx, req.IdOrUrl, req.Platform)
 }
 
 func (c *ytController) Text(ctx *httpx.Context) (any, error) {
@@ -37,7 +37,7 @@ func (c *ytController) Text(ctx *httpx.Context) (any, error) {
 	}
 	identity := ctx.Query("identity")
 	l := logic.NewTranscriptLogic()
-	tr, err := l.GetOrCreate(ctx, req.IdOrUrl, req.TargetLan, identity)
+	tr, err := l.GetOrCreateWithPlatform(ctx, req.IdOrUrl, req.TargetLan, identity, req.Platform)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +45,7 @@ func (c *ytController) Text(ctx *httpx.Context) (any, error) {
 	// 获取音频并返回原始数据（若为本地静态文件则读文件返回 data URL）
 	audioData := ""
 	audioType := ""
-	if a, aerr := dlyt.Svc.Audio(ctx, req.IdOrUrl); aerr == nil && a != nil {
+	if a, aerr := dlyt.Svc.AudioWithPlatform(ctx, req.IdOrUrl, req.Platform); aerr == nil && a != nil {
 		if strings.HasPrefix(a.AudioUrl, "/static/") {
 			localPath := filepath.Join("public", strings.TrimPrefix(a.AudioUrl, "/static/"))
 			if b, rerr := os.ReadFile(localPath); rerr == nil {

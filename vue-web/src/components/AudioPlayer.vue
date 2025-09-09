@@ -23,13 +23,17 @@
       </div>
       <div class="w-12 text-[10px] text-right text-gray-600 tabular-nums shrink-0">{{ timeText }}</div>
       <button v-if="showDownload" type="button" class="px-3 py-1 text-xs bg-black text-white rounded-md hover:opacity-90 shrink-0" @click="download">下载</button>
-      <audio ref="audioEl" :src="src" class="hidden"></audio>
+      <audio ref="audioEl" class="hidden">
+        <source :src="src" :type="mimeType" />
+      </audio>
       </div>
     </template>
 
     <!-- Default native controls -->
     <template v-else>
-      <audio ref="audioEl" :src="src" controls class="flex-1"></audio>
+      <audio ref="audioEl" controls class="flex-1">
+        <source :src="src" :type="mimeType" />
+      </audio>
       <template v-if="showActions">
         <button class="px-3 py-1 text-sm text-white bg-gray-700 rounded  hover:bg-gray-600" @click="download">下载</button>
         <button class="px-3 py-1 text-sm text-white bg-gray-700 rounded  hover:bg-gray-600" @click="copy">复制链接</button>
@@ -59,6 +63,27 @@ export default defineComponent({
     }
   },
   computed: {
+    mimeType() {
+      // 明确向 <audio> 提供 MIME，提升兼容性
+      if (this.src && this.src.startsWith('data:audio/')) {
+        // dataURL 已自带 MIME，这里也派生给 <source>
+        const m = this.src.match(/^data:(audio\/[a-z0-9+.-]+);/i)
+        return m ? m[1] : (this.audioType ? `audio/${this.audioType}` : 'audio/m4a')
+      }
+      if (this.audioType) return `audio/${this.audioType}`
+      // 根据 URL 后缀尽力推断
+      try {
+        const u = new URL(this.src, window.location.origin)
+        const p = u.pathname.toLowerCase()
+        if (p.endsWith('.mp3')) return 'audio/mpeg'
+        if (p.endsWith('.m4a') || p.endsWith('.mp4')) return 'audio/mp4'
+        if (p.endsWith('.aac')) return 'audio/aac'
+        if (p.endsWith('.ogg') || p.endsWith('.oga')) return 'audio/ogg'
+        if (p.endsWith('.wav')) return 'audio/wav'
+        if (p.endsWith('.flac')) return 'audio/flac'
+      } catch (e) {}
+      return 'audio/mp4'
+    },
     progressPercent() { return this.duration ? Math.min(100, (this.currentTime / this.duration) * 100) : 0 },
     timeText() {
       const fmt = (s) => {
@@ -84,6 +109,8 @@ export default defineComponent({
     if (!a) return
     a.crossOrigin = 'anonymous'
     a.preload = 'auto'
+    // 对于 dataURL，Safari/部分浏览器需要显式 load() 以解析 metadata
+    try { a.load() } catch (e) {}
     a.addEventListener('timeupdate', () => { this.currentTime = a.currentTime })
     a.addEventListener('loadedmetadata', () => { this.duration = a.duration })
     a.addEventListener('play', () => { this.playing = true })
@@ -93,7 +120,11 @@ export default defineComponent({
     toggle() {
       const a = this.$refs.audioEl
       if (!a) return
-      if (a.paused) a.play().catch(()=>{})
+      if (a.paused) {
+        // 对于未解析出时长的 dataURL，先触发一次 load 再播放
+        try { if (!isFinite(a.duration)) a.load() } catch (e) {}
+        a.play().catch(()=>{})
+      }
       else a.pause()
     },
     onSeek(e) {

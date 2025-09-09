@@ -1,6 +1,6 @@
 import { getToken, getIdentity } from '../utils/auth'
 
-const BASE = 'http://127.0.0.1:8088/api'
+const BASE = 'http://127.0.0.1:9005/api'
 
 function resolveUrl(path) {
   if (path.startsWith('http')) return path

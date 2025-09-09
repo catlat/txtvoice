@@ -23,26 +23,37 @@ func NewTranscriptLogic() *TranscriptLogic { return &TranscriptLogic{} }
 
 // GetOrCreate 流程：dlyt.Info -> upsert youtube_video -> dlyt.Audio -> ASR -> Translate -> upsert youtube_transcript
 func (l *TranscriptLogic) GetOrCreate(ctx context.Context, idOrUrl string, targetLang string, identity string) (*model.YoutubeTranscript, error) {
-	log.Printf("[Transcript] 开始处理转录请求 - IdOrUrl: %s, TargetLang: %s, Identity: %s", idOrUrl, targetLang, identity)
+	return l.GetOrCreateWithPlatform(ctx, idOrUrl, targetLang, identity, "")
+}
+
+// GetOrCreateWithPlatform 带平台参数的转录处理方法
+func (l *TranscriptLogic) GetOrCreateWithPlatform(ctx context.Context, idOrUrl string, targetLang string, identity string, platform string) (*model.YoutubeTranscript, error) {
+	log.Printf("[Transcript] 开始处理转录请求 - IdOrUrl: %s, TargetLang: %s, Identity: %s, Platform: %s", idOrUrl, targetLang, identity, platform)
 
 	if targetLang == "" {
 		targetLang = "zh"
 	}
 
 	log.Printf("[Transcript] Step 1: 获取视频信息")
-	info, err := dlyt.Svc.Info(ctx, idOrUrl)
+	info, err := dlyt.Svc.InfoWithPlatform(ctx, idOrUrl, platform)
 	if err != nil {
 		log.Printf("[Transcript] 获取视频信息失败 - Error: %v", err)
 		return nil, err
 	}
 	log.Printf("[Transcript] 视频信息获取成功 - VideoId: %s, Title: %s, Duration: %d", info.Id, info.Title, info.DurationSec)
 
+	// 根据平台确定source_site
+	sourceSite := platform
+	if sourceSite == "" {
+		sourceSite = "youtube" // 向后兼容
+	}
+
 	log.Printf("[Transcript] Step 2: 检查/创建视频记录")
 	var video model.YoutubeVideo
-	if err := db.WithContext(ctx).Where("source_site = ? AND video_id = ?", "youtube", info.Id).First(&video).Error(); err != nil {
-		log.Printf("[Transcript] 创建新视频记录 - VideoId: %s", info.Id)
+	if err := db.WithContext(ctx).Where("source_site = ? AND video_id = ?", sourceSite, info.Id).First(&video).Error(); err != nil {
+		log.Printf("[Transcript] 创建新视频记录 - VideoId: %s, SourceSite: %s", info.Id, sourceSite)
 		video = model.YoutubeVideo{
-			SourceSite:   "youtube",
+			SourceSite:   sourceSite,
 			VideoId:      info.Id,
 			Title:        info.Title,
 			ChannelTitle: info.Author,
@@ -55,7 +66,7 @@ func (l *TranscriptLogic) GetOrCreate(ctx context.Context, idOrUrl string, targe
 	}
 
 	log.Printf("[Transcript] Step 3: 获取音频URL")
-	audio, err := dlyt.Svc.Audio(ctx, idOrUrl)
+	audio, err := dlyt.Svc.AudioWithPlatform(ctx, idOrUrl, platform)
 	if err != nil {
 		log.Printf("[Transcript] 获取音频失败 - Error: %v", err)
 		return nil, err
@@ -86,14 +97,28 @@ func (l *TranscriptLogic) GetOrCreate(ctx context.Context, idOrUrl string, targe
 	log.Printf("[Transcript] 语音识别成功 - CharCount: %d, TextPreview: %.100s...",
 		asrResp.CharCount, asrResp.Text)
 
-	log.Printf("[Transcript] Step 5: 执行翻译")
-	trResp, err := translate.Svc.TranslateToZh(ctx, asrResp.Text)
-	if err != nil {
-		log.Printf("[Transcript] 翻译失败 - Error: %v", err)
-		return nil, err
+	// 根据平台决定是否翻译
+	var finalText string
+	var translateCharCount int
+
+	if sourceSite == "bilibili" {
+		// Bilibili视频直接使用ASR结果，不翻译
+		log.Printf("[Transcript] Step 5: Bilibili视频跳过翻译，直接使用ASR结果")
+		finalText = asrResp.Text
+		translateCharCount = 0
+	} else {
+		// YouTube视频需要翻译
+		log.Printf("[Transcript] Step 5: 执行翻译")
+		trResp, err := translate.Svc.TranslateToZh(ctx, asrResp.Text)
+		if err != nil {
+			log.Printf("[Transcript] 翻译失败 - Error: %v", err)
+			return nil, err
+		}
+		log.Printf("[Transcript] 翻译成功 - CharCount: %d, TextPreview: %.100s...",
+			trResp.CharCount, trResp.Text)
+		finalText = trResp.Text
+		translateCharCount = trResp.CharCount
 	}
-	log.Printf("[Transcript] 翻译成功 - CharCount: %d, TextPreview: %.100s...",
-		trResp.CharCount, trResp.Text)
 
 	log.Printf("[Transcript] Step 6: 保存转录结果")
 	var transcript model.YoutubeTranscript
@@ -103,28 +128,30 @@ func (l *TranscriptLogic) GetOrCreate(ctx context.Context, idOrUrl string, targe
 			VideoId:            video.Id,
 			Language:           targetLang,
 			OriginalText:       asrResp.Text,
-			TranslatedText:     trResp.Text,
+			TranslatedText:     finalText,
 			AsrCharCount:       asrResp.CharCount,
-			TranslateCharCount: trResp.CharCount,
+			TranslateCharCount: translateCharCount,
 		}
 		_ = db.WithContext(ctx).Create(&transcript)
 	} else {
 		log.Printf("[Transcript] 更新已存在的转录记录 - TranscriptId: %d", transcript.Id)
 		updates := map[string]any{
 			"original_text":        asrResp.Text,
-			"translated_text":      trResp.Text,
+			"translated_text":      finalText,
 			"asr_char_count":       asrResp.CharCount,
-			"translate_char_count": trResp.CharCount,
+			"translate_char_count": translateCharCount,
 		}
 		_ = db.WithContext(ctx).Model(&model.YoutubeTranscript{}).Where("id = ?", transcript.Id).Updates(updates)
 	}
 
 	log.Printf("[Transcript] Step 7: 更新使用统计")
 	_ = metrics.AddUsage(ctx, identity, asrResp.CharCount, 0, 1)
-	_ = metrics.AddUsage(ctx, identity, 0, trResp.CharCount, 0)
+	if translateCharCount > 0 {
+		_ = metrics.AddUsage(ctx, identity, 0, translateCharCount, 0)
+	}
 
 	log.Printf("[Transcript] 转录处理完成 - TranscriptId: %d, ASR字符数: %d, 翻译字符数: %d",
-		transcript.Id, asrResp.CharCount, trResp.CharCount)
+		transcript.Id, asrResp.CharCount, translateCharCount)
 
 	return &transcript, nil
 }

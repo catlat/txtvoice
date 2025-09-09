@@ -133,7 +133,7 @@
 
                 <!-- 右下角：获取字幕按钮（显眼、带图标与动态效果） -->
                 <button
-                  v-if="!inlineSubsEn && !inlineSubsZh"
+                  v-if="!hasInlineSubtitle"
                   @click="fetchInlineSubtitles"
                   :disabled="inlineSubsLoading"
                   class="absolute bottom-2 right-2 z-10 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-black text-white shadow hover:opacity-90 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-black/20"
@@ -149,6 +149,8 @@
             <!-- 视频结果信息卡片 -->
             <div v-if="showResultCard" class="w-full mt-4">
               <VideoResultCard
+                :platform="inlineVideo?.detected_platform"
+                :subtitle="inlineSubtitle"
                 :chinese-subtitle="inlineSubsZh"
                 :english-subtitle="inlineSubsEn"
                 :audio-url="resultAudioUrl"
@@ -191,7 +193,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, onMounted, watch, nextTick } from 'vue'
+import { defineComponent, ref, onMounted, watch, nextTick, computed } from 'vue'
 import { parseTxt, parseMd, parseDocx } from '../utils/file'
 import * as yt from '../api/yt'
 import * as tts from '../api/tts'
@@ -217,8 +219,9 @@ export default defineComponent({
     const inlineLoading = ref(false)
     const inlineError = ref('')
     const inlineSubsLoading = ref(false)
-    const inlineSubsEn = ref('')
-    const inlineSubsZh = ref('')
+    const inlineSubsEn = ref('') // 兼容性保留
+    const inlineSubsZh = ref('') // 兼容性保留
+    const inlineSubtitle = ref('') // 统一字幕
     const showInlineCard = ref(false)
     
     // video result card states
@@ -392,6 +395,18 @@ export default defineComponent({
     }
 
 
+    // 检查是否有字幕内容
+    const hasInlineSubtitle = computed(() => {
+      if (!inlineVideo.value?.detected_platform) return false
+      
+      const platform = inlineVideo.value.detected_platform
+      if (platform === 'bilibili') {
+        return !!inlineSubtitle.value
+      } else {
+        return !!(inlineSubsEn.value || inlineSubsZh.value)
+      }
+    })
+
     // 视频链接检测函数
     function detectVideoType(text) {
       const trimmed = (text || '').trim()
@@ -427,8 +442,15 @@ export default defineComponent({
       inlineLoading.value = true
       inlineError.value = ''
       try {
-        const info = await yt.info(url.trim())
-        inlineVideo.value = info && (info.data || info)
+        const videoType = detectVideoType(url.trim())
+        const info = await yt.info(url.trim(), videoType.type)
+        const videoInfo = info && (info.data || info)
+        // 保存原始输入用于后续平台检测
+        if (videoInfo) {
+          videoInfo.original_input = url.trim()
+          videoInfo.detected_platform = videoType.type
+        }
+        inlineVideo.value = videoInfo
         showInlineCard.value = true
         // 链接转卡片后清空输入框
         mainText.value = ''
@@ -445,10 +467,26 @@ export default defineComponent({
       inlineSubsLoading.value = true
       inlineError.value = ''
       try {
-        const res = await yt.text(inlineVideo.value.id || inlineVideo.value.video_id || inlineVideo.value.url || '')
+        const videoUrl = inlineVideo.value.id || inlineVideo.value.video_id || inlineVideo.value.url || ''
+        // 使用已保存的平台类型或重新检测
+        const platform = inlineVideo.value.detected_platform || 
+                         detectVideoType(inlineVideo.value.original_input || videoUrl).type
+        const res = await yt.text(videoUrl, platform)
         const payload = res && (res.data || res) || {}
-        inlineSubsEn.value = payload.original_text || payload.text_en || ''
-        inlineSubsZh.value = payload.translated_text || payload.text_zh || ''
+        
+        // 根据平台处理字幕显示
+        if (platform === 'bilibili') {
+          // Bilibili：只显示一个字幕（ASR结果）
+          inlineSubtitle.value = payload.translated_text || payload.original_text || ''
+          inlineSubsEn.value = ''
+          inlineSubsZh.value = ''
+        } else {
+          // YouTube：显示中英文字幕
+          inlineSubsEn.value = payload.original_text || ''  // 英文原文
+          inlineSubsZh.value = payload.translated_text || '' // 中文翻译
+          inlineSubtitle.value = '' // 清空Bilibili字幕字段
+        }
+        
         // 优先使用audio_data（base64数据），否则使用audio_url
         resultAudioUrl.value = payload.audio_data || payload.audio_url || ''
         resultAudioType.value = payload.audio_type || 'm4a'
@@ -462,7 +500,11 @@ export default defineComponent({
         }
         
         // 获取字幕成功后显示结果卡片
-        if (inlineSubsEn.value || inlineSubsZh.value) {
+        const hasSubtitle = platform === 'bilibili' ? 
+          !!inlineSubtitle.value : 
+          !!(inlineSubsEn.value || inlineSubsZh.value)
+          
+        if (hasSubtitle) {
           showResultCard.value = true
         }
       } catch (e) {
@@ -493,6 +535,7 @@ export default defineComponent({
       inlineError.value = ''
       inlineSubsEn.value = ''
       inlineSubsZh.value = ''
+      inlineSubtitle.value = '' // 清理统一字幕
       showResultCard.value = false
       resultAudioUrl.value = ''
       resultAudioType.value = ''
@@ -506,6 +549,7 @@ export default defineComponent({
       inlineError.value = ''
       inlineSubsEn.value = ''
       inlineSubsZh.value = ''
+      inlineSubtitle.value = '' // 清理统一字幕
       showResultCard.value = false
       resultAudioUrl.value = ''
       resultAudioType.value = ''
@@ -559,7 +603,7 @@ export default defineComponent({
       // 拖拽相关
       isDragOver, onDragEnter, onDragOver, onDragLeave, onDrop,
       // 内联卡片相关
-      inlineVideo, inlineLoading, inlineError, inlineSubsLoading, inlineSubsEn, inlineSubsZh, showInlineCard, previewInlineVideo, fetchInlineSubtitles, writeSubtitleToInput, clearInlineCard, changeLink, 
+      inlineVideo, inlineLoading, inlineError, inlineSubsLoading, inlineSubsEn, inlineSubsZh, inlineSubtitle, showInlineCard, hasInlineSubtitle, previewInlineVideo, fetchInlineSubtitles, writeSubtitleToInput, clearInlineCard, changeLink, 
       // 结果卡片相关
       showResultCard, resultAudioUrl, resultAudioType, handleWriteToInput,
       // 视频链接检测相关

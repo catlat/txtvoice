@@ -7,6 +7,9 @@ import (
 type IYtSvc interface {
 	Info(ctx context.Context, idOrUrl string) (*InfoResp, error)
 	Audio(ctx context.Context, idOrUrl string) (*AudioResp, error)
+	// 新增带平台参数的方法
+	InfoWithPlatform(ctx context.Context, idOrUrl, platform string) (*InfoResp, error)
+	AudioWithPlatform(ctx context.Context, idOrUrl, platform string) (*AudioResp, error)
 }
 
 type InfoResp struct {

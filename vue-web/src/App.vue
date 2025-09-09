@@ -1,7 +1,10 @@
 <template>
   <div class="flex">
-    <Sidebar @login="onLoginSuccess" @logout="logout" />
-    <div class="flex-1 min-h-screen bg-gray-50 ml-64">
+    <Sidebar @login="onLoginSuccess" @logout="logout" @sidebar-toggle="onSidebarToggle" />
+    <div :class="[
+      'flex-1 min-h-screen bg-gray-50 transition-all duration-300 ease-in-out',
+      sidebarCollapsed ? 'ml-16' : 'ml-64'
+    ]">
       <div class="max-w-screen-xl mx-auto py-6 px-6">
         <router-view />
       </div>
@@ -23,6 +26,7 @@ export default defineComponent({
     identity: '',
     token: '',
     showLogin: false,
+    sidebarCollapsed: localStorage.getItem('sidebar-collapsed') === 'true',
   }),
   created() {
     try {
@@ -48,6 +52,9 @@ export default defineComponent({
     onLoginSuccess({ token, identity }) {
       this.token = token
       this.identity = identity
+    },
+    onSidebarToggle(collapsed) {
+      this.sidebarCollapsed = collapsed
     },
   },
 })

@@ -558,4 +558,10 @@
 4. go run cmd/cron/main.go  -f .env   // 定时任务启动方式
 5. go run cmd/queue/main.go -f .env // 队列服务入口
 6. go run cmd/migrate/main.go -f .env // 数据库迁移入口
+
+powershell:
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o app-linux cmd/api/main.go
+cmd:
+set GOOS=linux && set GOARCH=amd64 && go build -o app-linux cmd/api/main.go
+运行方式：在Linux服务器上运行时使用 ./app-linux -f .env
 ```

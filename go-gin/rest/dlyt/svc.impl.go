@@ -50,3 +50,43 @@ func (s *YtSvc) Audio(ctx context.Context, idOrUrl string) (resp *AudioResp, err
 	}
 	return resp, nil
 }
+
+func (s *YtSvc) InfoWithPlatform(ctx context.Context, idOrUrl, platform string) (resp *InfoResp, err error) {
+	result := APIResponse{Data: &resp}
+	body := map[string]string{"id_or_url": idOrUrl}
+	if platform != "" {
+		body["platform"] = platform
+	}
+	err = s.Client().
+		NewRequest().
+		SetContext(ctx).
+		SetHeaders(map[string]string{"Content-Type": "application/json", "Accept": "application/json"}).
+		POST(InfoURL).
+		SetBody(body).
+		SetResult(&result).
+		Exec()
+	if err != nil {
+		return nil, errcode.ErrDLYTUpstream
+	}
+	return resp, nil
+}
+
+func (s *YtSvc) AudioWithPlatform(ctx context.Context, idOrUrl, platform string) (resp *AudioResp, err error) {
+	result := APIResponse{Data: &resp}
+	body := map[string]string{"id_or_url": idOrUrl}
+	if platform != "" {
+		body["platform"] = platform
+	}
+	err = s.Client().
+		NewRequest().
+		SetContext(ctx).
+		SetHeaders(map[string]string{"Content-Type": "application/json", "Accept": "application/json"}).
+		POST(AudioURL).
+		SetBody(body).
+		SetResult(&result).
+		Exec()
+	if err != nil {
+		return nil, errcode.ErrDLYTUpstream
+	}
+	return resp, nil
+}

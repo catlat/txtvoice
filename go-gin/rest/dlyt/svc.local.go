@@ -35,13 +35,81 @@ func detectVideoSource(idOrUrl string) string {
 		return "bilibili"
 	}
 
+	// 哔哩哔哩 BV 号检测（BV开头的11位字符串）
+	if regexp.MustCompile(`^bv[a-z0-9]{9}$`).MatchString(s) {
+		return "bilibili"
+	}
+
+	// 哔哩哔哩 av 号检测（av开头的数字）
+	if regexp.MustCompile(`^av\d+$`).MatchString(s) {
+		return "bilibili"
+	}
+
 	// YouTube 链接检测
 	if strings.Contains(s, "youtube.com") || strings.Contains(s, "youtu.be") {
 		return "youtube"
 	}
 
-	// 默认当作 YouTube 处理（兼容纯 ID 输入）
+	// YouTube ID 检测（11位字符串，包含字母数字和-_）
+	if regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`).MatchString(s) {
+		return "youtube"
+	}
+
+	// 默认当作 YouTube 处理（向后兼容）
 	return "youtube"
+}
+
+// constructFullURL 根据视频来源和ID构造完整的URL
+func constructFullURL(idOrUrl, videoSource string) string {
+	// 如果已经是完整的URL，直接返回
+	if strings.Contains(idOrUrl, "http") {
+		return idOrUrl
+	}
+
+	// 根据视频来源构造URL
+	switch videoSource {
+	case "bilibili":
+		if strings.HasPrefix(strings.ToLower(idOrUrl), "bv") {
+			return "https://www.bilibili.com/video/" + idOrUrl
+		}
+		if strings.HasPrefix(strings.ToLower(idOrUrl), "av") {
+			return "https://www.bilibili.com/video/" + idOrUrl
+		}
+	case "youtube":
+		// YouTube 的情况保持原样
+		return idOrUrl
+	}
+
+	return idOrUrl
+}
+
+// extractVideoID 提取视频ID，支持YouTube和Bilibili
+func extractVideoID(input, videoSource string) string {
+	s := strings.TrimSpace(input)
+	if s == "" {
+		return ""
+	}
+
+	switch videoSource {
+	case "bilibili":
+		// Bilibili BV号或av号
+		if !strings.Contains(s, "http") {
+			return s // 直接返回BV号或av号
+		}
+		// 从URL中提取BV号
+		if m := regexp.MustCompile(`(?i)/video/(BV[A-Za-z0-9]+)`).FindStringSubmatch(s); len(m) == 2 {
+			return m[1]
+		}
+		// 从URL中提取av号
+		if m := regexp.MustCompile(`(?i)/video/(av\d+)`).FindStringSubmatch(s); len(m) == 2 {
+			return m[1]
+		}
+	case "youtube":
+		// YouTube 使用原有的提取逻辑
+		return extractVideoIDFast(s)
+	}
+
+	return s
 }
 
 // convertLocalImageToBase64 将本地图片文件转换为 base64 数据URL
@@ -80,14 +148,25 @@ func convertLocalImageToBase64(localPath string) (string, error) {
 }
 
 func (s *LocalYtSvc) Info(ctx context.Context, idOrUrl string) (*InfoResp, error) {
-	// 检测视频来源
-	videoSource := detectVideoSource(idOrUrl)
-	log.Printf("yt.info video_source=%s input=%s", videoSource, idOrUrl)
+	return s.InfoWithPlatform(ctx, idOrUrl, "")
+}
 
-	videoId := extractVideoIDFast(idOrUrl)
+func (s *LocalYtSvc) InfoWithPlatform(ctx context.Context, idOrUrl, platform string) (*InfoResp, error) {
+	// 优先使用前端传递的平台类型，否则自动检测
+	videoSource := platform
+	if videoSource == "" {
+		videoSource = detectVideoSource(idOrUrl)
+	}
+	log.Printf("yt.info video_source=%s (from_frontend=%t) input=%s", videoSource, platform != "", idOrUrl)
+
+	// 使用新的extractVideoID函数
+	videoId := extractVideoID(idOrUrl, videoSource)
 	if videoId == "" {
 		videoId = idOrUrl
 	}
+
+	// 构造完整URL供yt-dlp使用
+	fullURL := constructFullURL(idOrUrl, videoSource)
 
 	// DB 命中直接返回；如字段缺失则回填；使用本地静态文件方案
 	var video model.YoutubeVideo
@@ -98,32 +177,28 @@ func (s *LocalYtSvc) Info(ctx context.Context, idOrUrl string) (*InfoResp, error
 	if err := db.WithContext(ctx).Where("source_site = ? AND video_id = ?", sourceSite, videoId).First(&video).Error(); err == nil {
 		missing := strings.TrimSpace(video.ThumbnailUrl) == "" || video.PublishedAt == nil || strings.TrimSpace(video.Title) == "" || strings.TrimSpace(video.ChannelTitle) == "" || video.DurationSec == 0
 
-		// 已有缩略图但不是本地静态链接，对于 YouTube 保存到本地并更新；哔哩哔哩保持原链接
+		// 已有缩略图但不是本地静态链接，统一保存到本地
 		if !missing && strings.TrimSpace(video.ThumbnailUrl) != "" && !isLocalStaticURL(video.ThumbnailUrl) {
-			if videoSource == "youtube" {
-				if localURL, err2 := saveURLToLocal(ctx, video.ThumbnailUrl, buildThumbKey(video.VideoId, video.ThumbnailUrl)); err2 == nil {
-					_ = db.WithContext(ctx).Model(&model.YoutubeVideo{}).Where("id = ?", video.Id).Update("thumbnail_url", localURL)
-					video.ThumbnailUrl = localURL
-					log.Printf("yt.info thumb_saved_local video_id=%s url=%s", video.VideoId, localURL)
-				} else {
-					log.Printf("yt.info thumb_save_local_failed video_id=%s err=%v", video.VideoId, err2)
-				}
+			if localURL, err2 := saveURLToLocal(ctx, video.ThumbnailUrl, buildThumbKey(video.VideoId, video.ThumbnailUrl)); err2 == nil {
+				_ = db.WithContext(ctx).Model(&model.YoutubeVideo{}).Where("id = ?", video.Id).Update("thumbnail_url", localURL)
+				video.ThumbnailUrl = localURL
+				log.Printf("yt.info thumb_saved_local video_id=%s url=%s source=%s", video.VideoId, localURL, videoSource)
 			} else {
-				log.Printf("yt.info bilibili_thumb_keep_original video_id=%s url=%s", video.VideoId, video.ThumbnailUrl)
+				log.Printf("yt.info thumb_save_local_failed video_id=%s err=%v source=%s", video.VideoId, err2, videoSource)
 			}
 		}
 
 		if !missing {
 			log.Printf("yt.info db_hit ok video_id=%s thumb_ok=%v", video.VideoId, strings.TrimSpace(video.ThumbnailUrl) != "")
 
-			// 对于 YouTube，如果是本地静态文件，转换为 base64
+			// 如果是本地静态文件，统一转换为 base64
 			thumbnailUrl := video.ThumbnailUrl
-			if videoSource == "youtube" && isLocalStaticURL(video.ThumbnailUrl) {
+			if isLocalStaticURL(video.ThumbnailUrl) {
 				if base64URL, err := convertLocalImageToBase64(video.ThumbnailUrl); err == nil {
 					thumbnailUrl = base64URL
-					log.Printf("yt.info thumb_converted_to_base64 video_id=%s", video.VideoId)
+					log.Printf("yt.info thumb_converted_to_base64 video_id=%s source=%s", video.VideoId, videoSource)
 				} else {
-					log.Printf("yt.info thumb_convert_base64_failed video_id=%s err=%v", video.VideoId, err)
+					log.Printf("yt.info thumb_convert_base64_failed video_id=%s err=%v source=%s", video.VideoId, err, videoSource)
 				}
 			}
 
@@ -139,18 +214,18 @@ func (s *LocalYtSvc) Info(ctx context.Context, idOrUrl string) (*InfoResp, error
 		}
 
 		log.Printf("yt.info db_hit but_missing video_id=%s need_fill_thumb=%v need_fill_pub=%v", video.VideoId, strings.TrimSpace(video.ThumbnailUrl) == "", video.PublishedAt == nil)
-		info, ferr := ytdl.FetchInfo(ctx, idOrUrl)
+		info, ferr := ytdl.FetchInfoWithPlatform(ctx, fullURL, videoSource)
 		if ferr != nil {
 			log.Printf("yt.info backfill_fetch_failed video_id=%s err=%v", video.VideoId, ferr)
 
-			// 对于 YouTube，如果是本地静态文件，转换为 base64
+			// 如果是本地静态文件，统一转换为 base64
 			thumbnailUrl := video.ThumbnailUrl
-			if videoSource == "youtube" && isLocalStaticURL(video.ThumbnailUrl) {
+			if isLocalStaticURL(video.ThumbnailUrl) {
 				if base64URL, err := convertLocalImageToBase64(video.ThumbnailUrl); err == nil {
 					thumbnailUrl = base64URL
-					log.Printf("yt.info thumb_converted_to_base64 video_id=%s", video.VideoId)
+					log.Printf("yt.info thumb_converted_to_base64 video_id=%s source=%s", video.VideoId, videoSource)
 				} else {
-					log.Printf("yt.info thumb_convert_base64_failed video_id=%s err=%v", video.VideoId, err)
+					log.Printf("yt.info thumb_convert_base64_failed video_id=%s err=%v source=%s", video.VideoId, err, videoSource)
 				}
 			}
 
@@ -166,15 +241,11 @@ func (s *LocalYtSvc) Info(ctx context.Context, idOrUrl string) (*InfoResp, error
 		}
 		thumbURL := info.ThumbnailUrl
 		if strings.TrimSpace(thumbURL) != "" {
-			if videoSource == "youtube" {
-				if localURL, upErr := saveURLToLocal(ctx, thumbURL, buildThumbKey(info.Id, thumbURL)); upErr == nil {
-					thumbURL = localURL
-					log.Printf("yt.info backfill_thumb_saved video_id=%s url=%s", info.Id, thumbURL)
-				} else {
-					log.Printf("yt.info backfill_thumb_save_failed video_id=%s err=%v", info.Id, upErr)
-				}
+			if localURL, upErr := saveURLToLocal(ctx, thumbURL, buildThumbKey(info.Id, thumbURL)); upErr == nil {
+				thumbURL = localURL
+				log.Printf("yt.info backfill_thumb_saved video_id=%s url=%s source=%s", info.Id, thumbURL, videoSource)
 			} else {
-				log.Printf("yt.info backfill_bilibili_thumb_keep_original video_id=%s url=%s", info.Id, thumbURL)
+				log.Printf("yt.info backfill_thumb_save_failed video_id=%s err=%v source=%s", info.Id, upErr, videoSource)
 			}
 		}
 		updates := map[string]any{}
@@ -201,14 +272,14 @@ func (s *LocalYtSvc) Info(ctx context.Context, idOrUrl string) (*InfoResp, error
 			}
 			log.Printf("yt.info db_backfilled video_id=%s fields=%v", video.VideoId, updates)
 		}
-		// 对于 YouTube，如果是本地静态文件，转换为 base64
+		// 如果是本地静态文件，统一转换为 base64
 		finalThumbnailUrl := chooseNonEmpty(video.ThumbnailUrl, thumbURL)
-		if videoSource == "youtube" && isLocalStaticURL(finalThumbnailUrl) {
+		if isLocalStaticURL(finalThumbnailUrl) {
 			if base64URL, err := convertLocalImageToBase64(finalThumbnailUrl); err == nil {
 				finalThumbnailUrl = base64URL
-				log.Printf("yt.info backfill_thumb_converted_to_base64 video_id=%s", video.VideoId)
+				log.Printf("yt.info backfill_thumb_converted_to_base64 video_id=%s source=%s", video.VideoId, videoSource)
 			} else {
-				log.Printf("yt.info backfill_thumb_convert_base64_failed video_id=%s err=%v", video.VideoId, err)
+				log.Printf("yt.info backfill_thumb_convert_base64_failed video_id=%s err=%v source=%s", video.VideoId, err, videoSource)
 			}
 		}
 
@@ -225,24 +296,20 @@ func (s *LocalYtSvc) Info(ctx context.Context, idOrUrl string) (*InfoResp, error
 
 	// 未命中调用 yt-dlp
 	log.Printf("yt.info db_miss fetch video_id=%s", videoId)
-	info, err := ytdl.FetchInfo(ctx, idOrUrl)
+	info, err := ytdl.FetchInfoWithPlatform(ctx, fullURL, videoSource)
 	if err != nil {
 		log.Printf("yt.info fetch_failed input=%s err=%v", idOrUrl, err)
 		return nil, errcode.ErrDLYTUpstream
 	}
 
-	// 对于 YouTube 下载缩略图到本地；哔哩哔哩保持原链接
+	// 统一下载缩略图到本地
 	thumbURL := info.ThumbnailUrl
 	if strings.TrimSpace(thumbURL) != "" {
-		if videoSource == "youtube" {
-			if localURL, upErr := saveURLToLocal(ctx, thumbURL, buildThumbKey(info.Id, thumbURL)); upErr == nil {
-				thumbURL = localURL
-				log.Printf("yt.info thumb_saved video_id=%s url=%s", info.Id, thumbURL)
-			} else {
-				log.Printf("yt.info thumb_save_failed video_id=%s err=%v", info.Id, upErr)
-			}
+		if localURL, upErr := saveURLToLocal(ctx, thumbURL, buildThumbKey(info.Id, thumbURL)); upErr == nil {
+			thumbURL = localURL
+			log.Printf("yt.info thumb_saved video_id=%s url=%s source=%s", info.Id, thumbURL, videoSource)
 		} else {
-			log.Printf("yt.info bilibili_thumb_keep_original video_id=%s url=%s", info.Id, thumbURL)
+			log.Printf("yt.info thumb_save_failed video_id=%s err=%v source=%s", info.Id, upErr, videoSource)
 		}
 	}
 
@@ -259,14 +326,14 @@ func (s *LocalYtSvc) Info(ctx context.Context, idOrUrl string) (*InfoResp, error
 	_ = db.WithContext(ctx).Create(&v)
 	log.Printf("yt.info db_created video_id=%s", info.Id)
 
-	// 对于 YouTube，如果是本地静态文件，转换为 base64
+	// 如果是本地静态文件，统一转换为 base64
 	finalThumbURL := thumbURL
-	if videoSource == "youtube" && isLocalStaticURL(thumbURL) {
+	if isLocalStaticURL(thumbURL) {
 		if base64URL, err := convertLocalImageToBase64(thumbURL); err == nil {
 			finalThumbURL = base64URL
-			log.Printf("yt.info thumb_converted_to_base64 video_id=%s", info.Id)
+			log.Printf("yt.info thumb_converted_to_base64 video_id=%s source=%s", info.Id, videoSource)
 		} else {
-			log.Printf("yt.info thumb_convert_base64_failed video_id=%s err=%v", info.Id, err)
+			log.Printf("yt.info thumb_convert_base64_failed video_id=%s err=%v source=%s", info.Id, err, videoSource)
 		}
 	}
 
@@ -282,19 +349,40 @@ func (s *LocalYtSvc) Info(ctx context.Context, idOrUrl string) (*InfoResp, error
 }
 
 func (s *LocalYtSvc) Audio(ctx context.Context, idOrUrl string) (*AudioResp, error) {
-	videoId := extractVideoIDFast(idOrUrl)
+	return s.AudioWithPlatform(ctx, idOrUrl, "")
+}
+
+func (s *LocalYtSvc) AudioWithPlatform(ctx context.Context, idOrUrl, platform string) (*AudioResp, error) {
+	// 优先使用前端传递的平台类型，否则自动检测
+	videoSource := platform
+	if videoSource == "" {
+		videoSource = detectVideoSource(idOrUrl)
+	}
+	log.Printf("yt.audio video_source=%s (from_frontend=%t) input=%s", videoSource, platform != "", idOrUrl)
+
+	// 使用新的extractVideoID函数
+	videoId := extractVideoID(idOrUrl, videoSource)
 	if videoId == "" {
 		videoId = idOrUrl
 	}
 
+	// 构造完整URL供yt-dlp使用
+	fullURL := constructFullURL(idOrUrl, videoSource)
+
+	// 确定数据库查询的source_site
+	sourceSite := videoSource
+	if sourceSite == "unknown" {
+		sourceSite = "youtube" // 向后兼容
+	}
+
 	// DB 命中音频直链则直接返回；如非本地静态链接则使用 yt-dlp 直接下载到本地
 	var video model.YoutubeVideo
-	if err := db.WithContext(ctx).Where("source_site = ? AND video_id = ?", "youtube", videoId).First(&video).Error(); err == nil {
+	if err := db.WithContext(ctx).Where("source_site = ? AND video_id = ?", sourceSite, videoId).First(&video).Error(); err == nil {
 		if strings.TrimSpace(video.AudioUrl) != "" {
 			log.Printf("yt.audio db_hit video_id=%s current_url=%s is_local=%v", video.VideoId, video.AudioUrl, isLocalStaticURL(video.AudioUrl))
 			if !isLocalStaticURL(video.AudioUrl) {
 				outBase := filepath.Join("public", "yt", "audio", video.VideoId)
-				if localFile, upErr := ytdl.DownloadAudioTo(ctx, idOrUrl, outBase); upErr == nil {
+				if localFile, upErr := ytdl.DownloadAudioToWithPlatform(ctx, fullURL, outBase, videoSource); upErr == nil {
 					localURL := localPathToStatic(localFile)
 					_ = db.WithContext(ctx).Model(&model.YoutubeVideo{}).Where("id = ?", video.Id).Update("audio_url", localURL)
 					video.AudioUrl = localURL
@@ -309,7 +397,7 @@ func (s *LocalYtSvc) Audio(ctx context.Context, idOrUrl string) (*AudioResp, err
 
 	// 未命中则直接下载到本地并返回静态路径
 	outBase := filepath.Join("public", "yt", "audio", videoId)
-	localFile, err := ytdl.DownloadAudioTo(ctx, idOrUrl, outBase)
+	localFile, err := ytdl.DownloadAudioToWithPlatform(ctx, fullURL, outBase, videoSource)
 	if err != nil {
 		log.Printf("yt.audio download_failed input=%s err=%v", idOrUrl, err)
 		return nil, errcode.ErrDLYTUpstream
@@ -322,7 +410,7 @@ func (s *LocalYtSvc) Audio(ctx context.Context, idOrUrl string) (*AudioResp, err
 		_ = db.WithContext(ctx).Model(&model.YoutubeVideo{}).Where("id = ?", video.Id).Updates(map[string]any{"audio_url": finalAudioURL})
 		log.Printf("yt.audio db_updated video_id=%s", video.VideoId)
 	} else {
-		_ = db.WithContext(ctx).Create(&model.YoutubeVideo{SourceSite: "youtube", VideoId: videoId, AudioUrl: finalAudioURL})
+		_ = db.WithContext(ctx).Create(&model.YoutubeVideo{SourceSite: sourceSite, VideoId: videoId, AudioUrl: finalAudioURL})
 		log.Printf("yt.audio db_created video_id=%s", videoId)
 	}
 
@@ -409,6 +497,7 @@ func saveURLToLocal(ctx context.Context, remoteURL string, key string) (string, 
 	if err != nil {
 		return "", err
 	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err

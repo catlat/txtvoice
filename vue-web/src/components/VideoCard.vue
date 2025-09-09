@@ -88,10 +88,24 @@ export default defineComponent({
       return this.youtubeUrl || ''
     },
     displayViews() {
-      if (typeof this.views === 'number') {
-        try { return this.views.toLocaleString('zh-CN') + ' 次观看' } catch (e) { return String(this.views) }
+      const views = this.views
+      if (views === undefined || views === null || views === '') {
+        return '—'
       }
-      return this.views || '—'
+      
+      const numViews = Number(views)
+      if (isNaN(numViews)) {
+        return String(views)
+      }
+      
+      // 格式化大数字显示
+      if (numViews >= 100000000) {
+        return (numViews / 100000000).toFixed(1) + '亿次观看'
+      } else if (numViews >= 10000) {
+        return (numViews / 10000).toFixed(1) + '万次观看'
+      } else {
+        return numViews.toLocaleString('zh-CN') + '次观看'
+      }
     },
     displayDuration() {
       if (this.durationSec !== undefined && this.durationSec !== null && this.durationSec !== '') {
@@ -108,7 +122,34 @@ export default defineComponent({
       return this.duration || '—'
     },
     displayDate() {
-      return this.publishDate || this.publishedAt || ''
+      const dateStr = this.publishDate || this.publishedAt || ''
+      if (!dateStr) return ''
+      
+      // 如果是YYYYMMDD格式，转换为更友好的显示
+      if (/^\d{8}$/.test(dateStr)) {
+        const year = dateStr.substring(0, 4)
+        const month = dateStr.substring(4, 6)
+        const day = dateStr.substring(6, 8)
+        return `${year}年${parseInt(month)}月${parseInt(day)}日`
+      }
+      
+      // 如果是ISO日期格式，也进行转换
+      if (dateStr.includes('-') || dateStr.includes('T')) {
+        try {
+          const date = new Date(dateStr)
+          if (!isNaN(date.getTime())) {
+            return date.toLocaleDateString('zh-CN', {
+              year: 'numeric',
+              month: 'long', 
+              day: 'numeric'
+            })
+          }
+        } catch (e) {
+          // 转换失败，返回原始字符串
+        }
+      }
+      
+      return dateStr
     },
   },
 })

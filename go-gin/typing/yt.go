@@ -1,7 +1,8 @@
 package typing
 
 type YtInfoReq struct {
-	IdOrUrl string `form:"id_or_url" json:"id_or_url" binding:"required" label:"视频ID或链接"`
+	IdOrUrl  string `form:"id_or_url" json:"id_or_url" binding:"required" label:"视频ID或链接"`
+	Platform string `form:"platform" json:"platform" binding:"omitempty" label:"平台类型"`
 }
 
 type YtInfoReply struct {
@@ -17,6 +18,7 @@ type YtInfoReply struct {
 type YtTextReq struct {
 	IdOrUrl   string `form:"id_or_url" json:"id_or_url" binding:"required" label:"视频ID或链接"`
 	TargetLan string `form:"target_lang" json:"target_lang" binding:"omitempty" label:"目标语言"`
+	Platform  string `form:"platform" json:"platform" binding:"omitempty" label:"平台类型"`
 }
 
 type YtTextReply struct {

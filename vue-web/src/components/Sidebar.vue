@@ -1,35 +1,61 @@
 <template>
-  <div class="fixed inset-y-0 left-0 z-10 h-screen w-64 transition-[left,right,width] duration-200 ease-linear md:flex border-r border-gray-200 bg-white flex flex-col">
+  <div :class="[
+    'fixed inset-y-0 left-0 z-10 h-screen transition-all duration-300 ease-in-out md:flex border-r border-gray-200 bg-white flex flex-col',
+    collapsed ? 'w-16' : 'w-64'
+  ]">
     <!-- Header -->
-    <div class="flex h-12 items-center justify-between px-5 py-0 border-b border-gray-100">
-      <div class="flex items-center gap-2">
+    <div class="flex h-12 items-center justify-between border-b border-gray-100" :class="collapsed ? 'px-2' : 'px-5'">
+      <div class="flex items-center gap-2" v-if="!collapsed">
         <img src="/logo.svg" alt="vvHub" class="h-10 w-auto text-gray-900" />
       </div>
+      <!-- 收缩/展开按钮 -->
+      <button 
+        @click="toggleCollapse"
+        class="flex items-center justify-center w-8 h-8 rounded-md hover:bg-gray-100 transition-colors duration-200 text-gray-600 hover:text-gray-900"
+        :class="collapsed ? 'mx-auto' : 'ml-auto'"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+          <path v-if="!collapsed" stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+          <path v-else stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
+        </svg>
+      </button>
     </div>
 
     <!-- Navigation -->
-    <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-4">
+    <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-auto" :class="collapsed ? 'p-2' : 'p-4'">
       <div class="flex w-full min-w-0 flex-col gap-1">
         <router-link 
           v-for="(menu, index) in menus" 
           :key="index" 
           :to="menu.to"
-          class="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-all duration-200 hover:bg-gray-50 hover:text-gray-900"
-          :class="{
-            'bg-gray-100 text-gray-900 font-medium shadow-sm': $route.path === menu.to,
-            'text-gray-600': $route.path !== menu.to
-          }"
+          :title="collapsed ? menu.text : ''"
+          class="flex items-center rounded-md text-sm transition-all duration-200 hover:bg-gray-50 hover:text-gray-900 relative group"
+          :class="[
+            collapsed ? 'w-12 h-12 justify-center' : 'w-full gap-3 px-3 py-2.5',
+            {
+              'bg-gray-100 text-gray-900 font-medium shadow-sm': $route.path === menu.to,
+              'text-gray-600': $route.path !== menu.to
+            }
+          ]"
         >
           <component :is="menu.icon" class="w-5 h-5 flex-shrink-0" />
-          <span class="truncate">{{ menu.text }}</span>
+          <span v-if="!collapsed" class="truncate">{{ menu.text }}</span>
+          
+          <!-- Tooltip for collapsed state -->
+          <div v-if="collapsed" class="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
+            {{ menu.text }}
+            <div class="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-full">
+              <div class="w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900"></div>
+            </div>
+          </div>
         </router-link>
       </div>
     </div>
 
     <!-- Footer -->
-    <div class="p-3 border-t border-gray-100">
+    <div class="border-t border-gray-100" :class="collapsed ? 'p-2' : 'p-3'">
       <!-- 登录区域 -->
-      <div v-if="!token" class="space-y-3">
+      <div v-if="!token && !collapsed" class="space-y-3">
         <input 
           v-model="identity" 
           class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
@@ -44,20 +70,51 @@
         </button>
       </div>
 
+      <!-- 收缩状态下的登录按钮 -->
+      <div v-if="!token && collapsed" class="flex justify-center">
+        <button 
+          @click="collapsed = false" 
+          title="点击展开登录"
+          class="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 text-white flex items-center justify-center hover:from-purple-600 hover:to-pink-600 transition-all duration-200"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+          </svg>
+        </button>
+      </div>
+
       <!-- 已登录：头像 + 名称 + 隐藏操作 -->
-      <div v-else class="relative" ref="accountBox">
-        <button class="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-gray-50 transition-colors" @click="open = !open">
+      <div v-else-if="token" class="relative" ref="accountBox">
+        <button 
+          :class="[
+            'flex items-center rounded-lg hover:bg-gray-50 transition-colors group',
+            collapsed ? 'w-12 h-12 justify-center' : 'w-full gap-3 px-2 py-2'
+          ]" 
+          @click="open = !open"
+          :title="collapsed ? maskPhone(identity) : ''"
+        >
           <div class="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-semibold">
             {{ lastDigit(identity) }}
           </div>
-          <div class="min-w-0 flex-1 text-left">
+          <div v-if="!collapsed" class="min-w-0 flex-1 text-left">
             <div class="truncate text-sm font-medium text-gray-900">{{ maskPhone(identity) }}</div>
           </div>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-gray-500">
+          <svg v-if="!collapsed" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-gray-500">
             <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.24 4.5a.75.75 0 01-1.08 0l-4.24-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
           </svg>
+          
+          <!-- 收缩状态下的tooltip -->
+          <div v-if="collapsed" class="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
+            {{ maskPhone(identity) }}
+            <div class="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-full">
+              <div class="w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900"></div>
+            </div>
+          </div>
         </button>
-        <div v-show="open" class="absolute bottom-12 left-2 right-2 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
+        <div v-show="open" :class="[
+          'absolute bottom-12 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden',
+          collapsed ? 'left-0 right-0' : 'left-2 right-2'
+        ]">
           <button @click="onLogout" class="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
             退出登录
           </button>
@@ -111,12 +168,15 @@ export default defineComponent({
     token: getToken() || '',
     userInfo: null,
     open: false,
+    collapsed: localStorage.getItem('sidebar-collapsed') === 'true',
   }),
   async created() {
     if (this.token) {
       await this.loadUserInfo()
     }
     document.addEventListener('click', this.handleOutside, true)
+    // 发射初始收缩状态
+    this.$emit('sidebar-toggle', this.collapsed)
   },
   beforeUnmount() {
     document.removeEventListener('click', this.handleOutside, true)
@@ -130,9 +190,20 @@ export default defineComponent({
           this.userInfo = null
         }
       }
+    },
+    collapsed: {
+      handler(newValue) {
+        // 持久化收缩状态
+        localStorage.setItem('sidebar-collapsed', String(newValue))
+        // 发射状态变化事件
+        this.$emit('sidebar-toggle', newValue)
+      }
     }
   },
   methods: {
+    toggleCollapse() {
+      this.collapsed = !this.collapsed
+    },
     handleOutside(e) {
       if (!this.open) return
       const box = this.$refs.accountBox
