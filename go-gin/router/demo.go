@@ -2,7 +2,6 @@ package router
 
 import (
 	"fmt"
-	"go-gin/controller"
 	"go-gin/event"
 	"go-gin/internal/eventbus"
 	"go-gin/internal/g"
@@ -17,7 +16,7 @@ import (
 func RegisterDemoRoutes(r *httpx.RouterGroup) {
 
 	rr := r.Group("/")
-	rr.After(middleware.AfterSampleA()).GET("/", controller.UserController.Index)
+	rr.After(middleware.AfterSampleA()).GET("/", func(ctx *httpx.Context) (any, error) { return g.MapStrStr{"demo": "ok"}, nil })
 
 	r.GET("/task", func(ctx *httpx.Context) (any, error) {
 		// err := task.DispatchNow(tasks.NewSampleTask("测试1234"))

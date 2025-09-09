@@ -4,14 +4,19 @@ import (
 	"context"
 	"go-gin/internal/component/logx"
 	"net/http"
+	"strings"
 
 	"github.com/go-resty/resty/v2"
 )
 
 func LogBeforeRequest(c *resty.Client, r *resty.Request) error {
+	url := r.URL
+	if !strings.HasPrefix(url, "http") {
+		url = c.BaseURL + url
+	}
 	logx.RestyLoggerInstance.Info().Ctx(r.Context()).
 		Str("keywords", "request").
-		Str("url", c.BaseURL+r.URL).
+		Str("url", url).
 		Str("method", r.Method).
 		Any("header", r.Header).
 		Str("query", r.QueryParam.Encode()).
@@ -39,8 +44,19 @@ func LogResponse(ctx context.Context, r *resty.Response) {
 	e := logx.RestyLoggerInstance.
 		Info().
 		Ctx(ctx).
-		Str("keywords", "response").
-		Str("body", r.String())
+		Str("keywords", "response")
+
+	// 避免对流式响应执行 r.String() 导致底层 RawBody 被读尽或关闭
+	url := r.Request.URL
+	logBody := true
+	if strings.Contains(url, "/api/v3/tts/unidirectional") || r.Request.Header.Get("X-Log-Body") == "ignore" {
+		logBody = false
+	}
+	if logBody {
+		e = e.Str("body", r.String())
+	} else {
+		e = e.Str("body", "<streaming body omitted>")
+	}
 
 	if r.StatusCode() != http.StatusOK {
 		e = e.Int("status", r.StatusCode())

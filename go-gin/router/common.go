@@ -1,7 +1,6 @@
 package router
 
 import (
-	"go-gin/controller"
 	"go-gin/internal/component/db"
 	"go-gin/internal/component/redisx"
 	"go-gin/internal/errorx"
@@ -26,5 +25,8 @@ func RegisterCommonRoutes(route *httpx.Engine) {
 			"redis":    util.When(redis_err == nil, "ok", "failed"),
 		}, nil
 	})
-	route.GET("/", controller.UserController.Index)
+	// 根路径简单返回
+	route.GET("/", func(ctx *httpx.Context) (any, error) {
+		return g.MapStrStr{"service": "ok"}, nil
+	})
 }

@@ -14,6 +14,7 @@ type Config struct {
 	DB      db.Config     `yaml:"db"`
 	Log     logx.Config   `yaml:"log"`
 	Svc     SvcConfig     `yaml:"svc"`
+	Creds   CredsConfig   `yaml:"creds"`
 	Monitor MonitorConfig `yaml:"monitor"`
 }
 

@@ -10,4 +10,10 @@ var (
 	ErrUserNameOrPwdFaild = errorx.New(20002, "用户名或者密码错误")
 	ErrUserMustLogin      = errorx.New(20003, "请先登录")
 	ErrUserNeedLoginAgain = errorx.New(20004, "token已过期,请重新登录")
+
+	// 第三方服务错误
+	ErrDLYTUpstream = errorx.New(20020, "视频服务错误")
+	ErrASRUpstream  = errorx.New(20021, "语音识别服务错误")
+	ErrTranslateUp  = errorx.New(20022, "翻译服务错误")
+	ErrTTSUpstream  = errorx.New(20023, "语音合成服务错误")
 )

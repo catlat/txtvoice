@@ -27,6 +27,12 @@ func NewBaseSvc(url string) *BaseSvc {
 	}
 }
 
+func NewStreamingBaseSvc(url string) *BaseSvc {
+	return &BaseSvc{
+		client: NewStreamingClient().SetBaseURL(url),
+	}
+}
+
 func (b *BaseSvc) Client() *Client {
 	return b.client
 }

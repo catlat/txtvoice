@@ -16,7 +16,8 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter var', ...defaultTheme.fontFamily.sans],
+        // Prefer locally installed Inter; otherwise fall back to system stack
+        sans: ['Inter', 'Inter var', ...defaultTheme.fontFamily.sans],
       },
     },
   },

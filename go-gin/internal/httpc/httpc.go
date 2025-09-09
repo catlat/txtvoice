@@ -3,6 +3,9 @@ package httpc
 import (
 	"context"
 	"go-gin/internal/errorx"
+	"io"
+	"net/http"
+	"time"
 
 	"github.com/go-resty/resty/v2"
 )
@@ -58,6 +61,17 @@ func (r *Request) SetBody(body any) *Request {
 	return r
 }
 
+// Multipart helpers
+func (r *Request) SetMultipartFile(fieldName, fileName string, reader io.Reader) *Request {
+	r.base.SetFileReader(fieldName, fileName, reader)
+	return r
+}
+
+func (r *Request) SetMultipartFormData(fields map[string]string) *Request {
+	r.base.SetMultipartFormData(fields)
+	return r
+}
+
 func (r *Request) SetResult(res any) *Request {
 	r.base.SetResult(res)
 	return r
@@ -65,6 +79,11 @@ func (r *Request) SetResult(res any) *Request {
 
 func (r *Request) SetContext(ctx context.Context) *Request {
 	r.base.SetContext(ctx)
+	return r
+}
+
+func (r *Request) SetDoNotParseResponse(parse bool) *Request {
+	r.base.SetDoNotParseResponse(parse)
 	return r
 }
 
@@ -85,11 +104,22 @@ func (r *Request) Send() (*resty.Response, error) {
 }
 
 func (r *Request) Exec() error {
-	resp, err := r.base.Send()
+	var resp *resty.Response
+	var err error
+	// simple exponential backoff for 5xx
+	for attempt := 0; attempt < 3; attempt++ {
+		resp, err = r.base.Send()
+		if err == nil && resp != nil && resp.StatusCode() < http.StatusInternalServerError {
+			break
+		}
+		if attempt < 2 {
+			time.Sleep(time.Duration(1<<attempt) * 200 * time.Millisecond)
+		}
+	}
 	if err != nil {
 		return errorx.ErrThirdAPIConnectFailed
 	}
-	if resp.String() == "" {
+	if resp == nil || resp.String() == "" {
 		return errorx.ErrThirdAPIContentNoContentFailed
 	}
 	if ret, ok := r.base.Result.(IBaseResponse); ok {

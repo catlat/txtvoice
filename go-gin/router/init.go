@@ -6,8 +6,19 @@ import (
 
 func Init(route *httpx.Engine) {
 	RegisterCommonRoutes(route)
-	RegisterUserRoutes(route.Group("/user"))
 	RegisterLoginRoutes(route.Group("/"))
-	RegisterApiRoutes(route.Group("/api"))
+
+	api := route.Group("/api")
+	RegisterApiRoutes(api)
+	RegisterYtRoutes(api)
+	RegisterTTSRoutes(api)
+	RegisterHistoryRoutes(api)
+	RegisterAccountRoutes(api)
+	RegisterAuthRoutes(api)
+	RegisterAdminRoutes(api)
+
 	RegisterDemoRoutes(route.Group("/demo"))
+
+	// Serve local static files under /static from ./public
+	route.Engine.Static("/static", "./public")
 }

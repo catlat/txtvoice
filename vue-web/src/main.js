@@ -29,4 +29,9 @@ if (import.meta.hot) {
 
 app.use(router)
 
+router.afterEach((to) => {
+  const base = 'VvHub'
+  document.title = to.meta && to.meta.title ? `${to.meta.title} - ${base}` : base
+})
+
 app.mount('#app')
