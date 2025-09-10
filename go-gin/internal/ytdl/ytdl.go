@@ -98,8 +98,21 @@ func getAudioFormat() string {
 	if f := strings.TrimSpace(os.Getenv("YTDL_AUDIO_FORMAT")); f != "" {
 		return f
 	}
-	// 优化为最低质量音频，适合语音识别
-	return "worstaudio/bestaudio[abr<=32]/bestaudio[abr<=64]/bestaudio"
+	// 优先选择英文音轨（language 以 en 开头），在此基础上选择中等音质
+	// 兼顾清晰度与体积：≤128kbps 优先，其次 ≤160kbps，最后兜底
+	lang := strings.TrimSpace(os.Getenv("YTDL_AUDIO_LANG"))
+	if lang == "" {
+		lang = "en"
+	}
+	// 使用前缀匹配，适配 en、en-US、en-GB 等
+	return fmt.Sprintf(
+		"bestaudio[language^=%s][abr<=128]/"+
+			"bestaudio[language^=%s][abr<=160]/"+
+			"bestaudio[abr<=128]/"+
+			"bestaudio[abr<=160]/"+
+			"bestaudio",
+		lang, lang,
+	)
 }
 
 // FetchInfo 使用 yt-dlp 获取视频信息（本地执行，不依赖外部服务）
