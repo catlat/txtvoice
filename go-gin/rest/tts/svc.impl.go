@@ -58,6 +58,11 @@ func (s *TTSSvc) Synthesize(ctx context.Context, text, speaker string) (resp *TT
 	return s.doOnce(ctx, text, DefaultSpeaker, defaultResourceId())
 }
 
+// SynthesizeWithResource 使用明确的资源ID进行合成，不做任何回退
+func (s *TTSSvc) SynthesizeWithResource(ctx context.Context, text, speaker, resourceId string) (*TTSResp, error) {
+	return s.doOnce(ctx, text, speaker, resourceId)
+}
+
 func pickResourceBySpeaker(speaker string) string {
 	sp := strings.ToLower(speaker)
 	if strings.HasPrefix(sp, "rec_") || sp == "custom_mix_bigtts" {
@@ -89,6 +94,12 @@ func detectExplicitLanguage(speaker string) string {
 }
 
 func (s *TTSSvc) doOnce(ctx context.Context, text, speaker, resourceId string) (*TTSResp, error) {
+	// 验证凭据
+	if volcCreds.AppId == "" || volcCreds.AccessKey == "" {
+		log.Printf("TTS ERROR: Missing Volc credentials")
+		return nil, errcode.ErrTTSUpstream
+	}
+
 	// 根据音色设置语种，启用语言检测以支持跨语种合成
 	additions := map[string]any{
 		"enable_language_detector": true,
@@ -131,7 +142,7 @@ func (s *TTSSvc) doOnce(ctx context.Context, text, speaker, resourceId string) (
 
 	res, e := req.Send()
 	if e != nil {
-		log.Println("TTS Synthesize error 1:", e)
+		log.Printf("TTS request failed: %v (speaker=%s, resource=%s)", e, speaker, resourceId)
 		return nil, errcode.ErrTTSUpstream
 	}
 	defer func() { _ = res.RawBody().Close() }()
@@ -170,14 +181,14 @@ func (s *TTSSvc) doOnce(ctx context.Context, text, speaker, resourceId string) (
 		}
 	}
 	if sawMismatch {
-		log.Println("TTS Synthesize error 3: resource mismatch")
+		log.Printf("TTS resource mismatch: speaker=%s, resource=%s", speaker, resourceId)
 		return nil, errcode.ErrTTSUpstream
 	}
 	// 若未收到任何音频分片，视为失败，让上层触发回退逻辑
 	if len(audio) == 0 {
-		log.Println("TTS Synthesize error 4: empty audio")
+		log.Printf("TTS empty audio: speaker=%s, resource=%s", speaker, resourceId)
 		return nil, errcode.ErrTTSUpstream
 	}
-	log.Println("TTS Synthesize ok", "speaker", speaker, "resource", resourceId, "bytes", len(audio), "req_id", reqID)
+	log.Printf("TTS success: speaker=%s, resource=%s, bytes=%d", speaker, resourceId, len(audio))
 	return &TTSResp{Audio: audio, Size: len(audio), UsedSpeaker: speaker, UsedResourceId: resourceId, RequestId: reqID}, nil
 }

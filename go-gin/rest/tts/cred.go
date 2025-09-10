@@ -8,4 +8,6 @@ type VolcCreds struct {
 
 var volcCreds VolcCreds
 
-func SetVolcCreds(c VolcCreds) { volcCreds = c }
+func SetVolcCreds(c VolcCreds) {
+	volcCreds = c
+}

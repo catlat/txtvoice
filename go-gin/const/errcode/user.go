@@ -16,4 +16,7 @@ var (
 	ErrASRUpstream  = errorx.New(20021, "语音识别服务错误")
 	ErrTranslateUp  = errorx.New(20022, "翻译服务错误")
 	ErrTTSUpstream  = errorx.New(20023, "语音合成服务错误")
+
+	// 业务扩展错误
+	ErrUserVoiceNotConfigured = errorx.New(20030, "未配置我的声音")
 )

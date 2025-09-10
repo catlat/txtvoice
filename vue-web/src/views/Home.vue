@@ -78,12 +78,33 @@
             <!-- 工具栏：左中右三段布局 -->
             <div class="mt-2 w-full">
               <div class="flex items-center justify-between gap-3">
-                <!-- 左：文件、音色（卡片显示时保持占位，固定右侧按钮位置） -->
+                <!-- 左：文件、我的声音、音色（卡片显示时保持占位，固定右侧按钮位置） -->
                 <div class="flex items-center gap-2" :class="showInlineCard ? 'invisible' : ''">
                   <button type="button" class="size-9 inline-flex items-center justify-center text-gray-800 hover:opacity-80" title="上传文件" @click="triggerUpload">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="size-5"><path fill="currentColor" d="M11.434 10.358a.75.75 0 0 1 1.004.052l2.585 2.585a.75.75 0 0 1-1.061 1.06l-1.305-1.304v4.606a.75.75 0 0 1-1.5 0v-4.606l-1.12 1.12a.75.75 0 0 1-1.06-1.06l2.4-2.4z"/><path fill="currentColor" fill-rule="evenodd" d="M13.586 2c.464 0 .91.185 1.237.513l5.164 5.164.117.128c.255.311.396.703.396 1.11V19.25A2.75 2.75 0 0 1 17.75 22H6.25a2.75 2.75 0 0 1-2.75-2.75V4.75A2.75 2.75 0 0 1 6.25 2zM6.25 3.5C5.56 3.5 5 4.06 5 4.75v14.5c0 .69.56 1.25 1.25 1.25h11.5c.69 0 1.25-.56 1.25-1.25v-10h-4.25A1.75 1.75 0 0 1 13 7.5v-4zm8.25 4c0 .138.112.25.25.25h3.19L14.5 4.31z" clip-rule="evenodd"/></svg>
                   </button>
-                  <button ref="voiceBtnRef" type="button" :class="voiceBtnClass" @click="toggleVoicePanel" title="选择音色">
+                  
+                  <!-- 我的声音VIP按钮 -->
+                  <button 
+                    type="button" 
+                    :class="useMyVoice ? 'bg-gradient-to-r from-gray-800 to-gray-900 text-amber-400 border-2 border-amber-400 shadow-lg' : 'bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200'"
+                    class="px-3 py-2 rounded-lg text-sm inline-flex items-center transition-all duration-300 relative" 
+                    @click="toggleMyVoice" 
+                    title="使用我的声音 - VIP专享">
+                    <!-- VIP皇冠图标 -->
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" :class="useMyVoice ? 'text-amber-400' : 'text-amber-500'" class="w-4 h-4 mr-2" fill="currentColor">
+                      <path d="M5 16L3 6l5.5 4L12 4l3.5 6L21 6l-2 10H5zm2.7-2h8.6l.9-4.4-2.4 1.6L12 8l-2.8 3.2-2.4-1.6L7.7 14z"/>
+                    </svg>
+                    <span class="font-medium">我的声音</span>
+                  </button>
+                  
+                  <button 
+                    ref="voiceBtnRef" 
+                    type="button" 
+                    :class="voiceBtnClass" 
+                    :disabled="useMyVoice"
+                    @click="toggleVoicePanel" 
+                    title="选择预置音色">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4 mr-1" :class="voiceIconClass" fill="currentColor"><path d="M7 4a1 1 0 0 1 1 1v14a1 1 0 1 1-2 0V5a1 1 0 0 1 1-1zm10 0a1 1 0 0 1 1 1v14a1 1 0 1 1-2 0V5a1 1 0 0 1 1-1zM12 7a1 1 0 0 1 1 1v8a1 1 0 1 1-2 0V8a1 1 0 0 1 1-1z"/></svg>
                     <span class="truncate max-w-[10rem]">{{ currentVoiceLabel }}</span>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="inline w-4 h-4 ml-1 text-gray-500">
@@ -204,16 +225,33 @@ export default defineComponent({
     function toggleVoicePanel() { showVoicePanel.value = !showVoicePanel.value }
     const selectedVoiceMeta = ref({ label: '', gender: '' })
     const currentVoiceLabel = computed(() => selectedVoiceMeta.value.label || '音色')
+    
+    // 我的声音开关（默认开启）
+    const useMyVoice = ref(true)
+    function toggleMyVoice() { 
+      useMyVoice.value = !useMyVoice.value
+      if (useMyVoice.value) {
+        // 开启我的声音时，关闭音色面板
+        showVoicePanel.value = false
+      }
+    }
     const voiceBtnClass = computed(() => {
-      const base = 'px-2 py-2 rounded-md text-sm bg-transparent border-0 focus:outline-none focus:ring-1 inline-flex items-center hover:bg-gray-50'
+      const base = 'px-2 py-2 rounded-md text-sm bg-transparent border-0 focus:outline-none focus:ring-1 inline-flex items-center'
+      if (useMyVoice.value) {
+        return base + ' text-gray-500 cursor-not-allowed bg-gray-100 border border-gray-200'
+      }
+      const basePlus = base + ' hover:bg-gray-50 transition-colors duration-200'
       const info = getCurrentVoiceInfo()
-      if (!info) return base + ' text-gray-800 focus:ring-gray-300'
+      if (!info) return basePlus + ' text-gray-800 focus:ring-gray-300'
       const g = (info.gender || '').toLowerCase()
-      if (g.includes('女') || g.includes('female')) return base + ' text-pink-600 focus:ring-pink-300'
-      if (g.includes('男') || g.includes('male')) return base + ' text-blue-600 focus:ring-blue-300'
-      return base + ' text-gray-700 focus:ring-gray-300'
+      if (g.includes('女') || g.includes('female')) return basePlus + ' text-pink-600 focus:ring-pink-300'
+      if (g.includes('男') || g.includes('male')) return basePlus + ' text-blue-600 focus:ring-blue-300'
+      return basePlus + ' text-gray-700 focus:ring-gray-300'
     })
     const voiceIconClass = computed(() => {
+      if (useMyVoice.value) {
+        return 'text-gray-400'
+      }
       const info = getCurrentVoiceInfo()
       if (!info) return 'text-gray-700'
       const g = (info.gender || '').toLowerCase()
@@ -233,6 +271,8 @@ export default defineComponent({
         }
       } catch (_) {}
       showVoicePanel.value = false
+      // 选择音色时关闭我的声音
+      useMyVoice.value = false
     }
     async function preloadVoiceMeta() {
       try {
@@ -461,6 +501,8 @@ export default defineComponent({
 
     // 内联预览视频信息
     async function previewInlineVideo(url) {
+      // 预览视频卡片前清理旧音频，避免误以为与当前流程相关
+      audioUrl.value = ''
       inlineLoading.value = true
       inlineError.value = ''
       try {
@@ -486,6 +528,8 @@ export default defineComponent({
     // 获取字幕（优化：直接写回输入框，不显示结果卡片/音频）
     async function fetchInlineSubtitles() {
       if (!inlineVideo.value) return
+      // 开始“继续创作”前清理旧音频，避免继续创作时仍显示上一条音频
+      audioUrl.value = ''
       actionLoading.value = true
       inlineError.value = ''
       try {
@@ -553,7 +597,7 @@ export default defineComponent({
       // 普通文本 或 “完成创作”阶段：进行TTS合成
       loading.value = true; error.value = ''; audioUrl.value = ''
       try {
-        const res = await tts.synthesize({ text, speaker: speaker.value })
+        const res = await tts.synthesize({ text, speaker: speaker.value, use_my_voice: useMyVoice.value })
         const data = res && (res.data || res)
         audioUrl.value = data && (data.audio_url || data.url) || ''
         if (!audioUrl.value) throw new Error('未返回音频地址')
@@ -638,6 +682,8 @@ export default defineComponent({
       detectVideoType, isYouTubeUrl, isVideoUrl,
       // 音色面板开关
       showVoicePanel, toggleVoicePanel, voicePanelRef, voiceBtnRef, currentVoiceLabel, voiceBtnClass, voiceIconClass, onVoiceSelected,
+      // 我的声音开关
+      useMyVoice, toggleMyVoice,
     }
   },
 })

@@ -23,7 +23,7 @@ func (c *ttsController) Synthesize(ctx *httpx.Context) (any, error) {
 	}
 	identity := httpx.Identity(ctx)
 	l := logic.NewTTSLogic()
-	item, err := l.Synthesize(ctx, identity, req.Text, req.Speaker)
+	item, err := l.Synthesize(ctx, identity, req.Text, req.Speaker, req.UseMyVoice)
 	if err != nil {
 		return nil, err
 	}
@@ -40,6 +40,7 @@ func (c *ttsController) Synthesize(ctx *httpx.Context) (any, error) {
 			"audio_url_len":  len(item.AudioUrl),
 			"char_count":     item.CharCount,
 			"speaker":        req.Speaker,
+			"use_my_voice":   req.UseMyVoice,
 		},
 	)
 	return resp, nil

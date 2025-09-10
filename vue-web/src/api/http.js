@@ -2,7 +2,7 @@ import { getToken, getIdentity } from '../utils/auth'
 
 // const BASE = 'http://43.133.180.227:9005/api'
 const BASE = 'http://127.0.0.1:9005/api'
-
+//  const BASE = '/api'
 function resolveUrl(path) {
   if (path.startsWith('http')) return path
   return `${BASE}${path}`

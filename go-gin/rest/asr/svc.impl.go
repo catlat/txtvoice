@@ -59,6 +59,8 @@ func (s *ASRSvc) Recognize(ctx context.Context, audioUrl string) (resp *ASRResp,
 			},
 			"request": map[string]any{
 				"model_name": "bigmodel",
+				"language":   "en-US",
+				"enable_ddc": true,
 			},
 		}
 	} else {
@@ -72,6 +74,8 @@ func (s *ASRSvc) Recognize(ctx context.Context, audioUrl string) (resp *ASRResp,
 			},
 			"request": map[string]any{
 				"model_name": "bigmodel",
+				"language":   "en-US",
+				"enable_ddc": true,
 			},
 		}
 	}
