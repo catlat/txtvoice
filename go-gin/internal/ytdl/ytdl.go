@@ -55,14 +55,14 @@ func getBin() string {
 	return "yt-dlp"
 }
 
-// getCookies 从Redis中获取指定平台的cookie文件路径
+// getCookies 从 Redis 读取 Netscape Cookie 文本，写入临时文件并返回路径（不兼容旧版路径值）
 func getCookies(ctx context.Context, platform string) string {
 	if platform == "" {
 		platform = "youtube" // 默认平台
 	}
 
 	redisKey := fmt.Sprintf("ytdl:cookies:%s", platform)
-	cookiePath, err := redisx.Client().Get(ctx, redisKey).Result()
+	redisVal, err := redisx.Client().Get(ctx, redisKey).Result()
 	if err == redis.Nil {
 		// key不存在，返回空字符串
 		return ""
@@ -71,11 +71,25 @@ func getCookies(ctx context.Context, platform string) string {
 		return ""
 	}
 
-	cookiePath = strings.TrimSpace(cookiePath)
-	if cookiePath != "" {
-		log.Printf("ytdl: using cookies for platform %s: %s", platform, cookiePath)
+	v := strings.TrimSpace(redisVal)
+	if v == "" {
+		return ""
 	}
-	return cookiePath
+
+	// 始终按文本处理（Netscape格式）
+	tmpFile, createErr := os.CreateTemp("", fmt.Sprintf("ytcookies_%s_*.txt", platform))
+	if createErr != nil {
+		log.Printf("ytdl: create temp cookie file failed platform=%s err=%v", platform, createErr)
+		return ""
+	}
+	if _, writeErr := tmpFile.WriteString(v); writeErr != nil {
+		_ = tmpFile.Close()
+		log.Printf("ytdl: write temp cookie file failed platform=%s err=%v", platform, writeErr)
+		return ""
+	}
+	_ = tmpFile.Close()
+	log.Printf("ytdl: using cookies from redis (written to temp) platform=%s file=%s len=%d", platform, tmpFile.Name(), len(v))
+	return tmpFile.Name()
 }
 
 func getProxy() string { return strings.TrimSpace(os.Getenv("YTDL_PROXY")) }

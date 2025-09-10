@@ -22,7 +22,6 @@ playwright install chromium
 
 import time
 import redis
-from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 # 平台配置
@@ -85,29 +84,21 @@ def save_cookie_to_redis(cookie_content, platform="youtube"):
         # 测试连接
         r.ping()
         
-        # 创建临时cookie文件（包含时间戳避免冲突）
-        timestamp = int(time.time())
-        temp_cookie_file = Path(f"{platform}_cookies_{timestamp}.txt")
-        temp_cookie_file.write_text(cookie_content, encoding="utf-8")
-        
-        # 将cookie文件路径存储到Redis
+        # 将cookie内容直接存储到Redis
         redis_key = f"ytdl:cookies:{platform}"
-        cookie_file_path = str(temp_cookie_file.resolve())
-        
-        r.set(redis_key, cookie_file_path)
+        r.set(redis_key, cookie_content)
         print(f"[OK] Cookie已保存到Redis")
         print(f"    Redis Key: {redis_key}")
-        print(f"    Cookie File: {cookie_file_path}")
-        print(f"    Cookie Size: {len(cookie_content)} 字符")
+        print(f"    Cookie Length: {len(cookie_content)} 字符")
         
         # 验证存储
-        stored_path = r.get(redis_key)
-        if stored_path == cookie_file_path:
+        stored_value = r.get(redis_key)
+        if stored_value == cookie_content:
             print(f"[OK] Redis 存储验证成功")
         else:
             print(f"[WARN] Redis 存储验证失败")
         
-        return temp_cookie_file
+        return redis_key
         
     except redis.RedisError as e:
         raise RuntimeError(f"Redis操作失败: {e}")
@@ -138,10 +129,9 @@ def main(platform="youtube"):
     print(f"[OK] 从浏览器获取Cookie成功，共{len(cookies)}个cookie")
     
     # 直接保存到Redis
-    cookie_file = save_cookie_to_redis(cookie_content, platform)
+    redis_key = save_cookie_to_redis(cookie_content, platform)
     print(f"[OK] Cookie已保存到Redis，平台: {platform}")
-    print(f"[INFO] 临时文件: {cookie_file}")
-    print(f"[INFO] Redis Key: ytdl:cookies:{platform}")
+    print(f"[INFO] Redis Key: {redis_key}")
 
 if __name__ == "__main__":
     import sys
