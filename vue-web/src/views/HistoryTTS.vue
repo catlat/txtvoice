@@ -43,12 +43,13 @@
                   
                   <!-- Text Preview -->
                   <div class="text-gray-900 leading-relaxed">
-                    <p class="line-clamp-3">{{ it.text_preview || it.text || '无文本内容' }}</p>
+                    <p class="line-clamp-3">{{ it.text_preview || '无文本内容' }}</p>
                   </div>
                   
-                  <!-- Character Count -->
-                  <div v-if="it.text" class="mt-2 text-xs text-gray-500">
-                    {{ (it.text || '').length }} 字符
+                  <!-- Character Count & Speaker -->
+                  <div class="mt-2 text-xs text-gray-500 flex items-center gap-3">
+                    <span>{{ it.char_count || 0 }} 字符</span>
+                    <span v-if="it.speaker">语音：{{ it.speaker }}</span>
                   </div>
                 </div>
 
@@ -58,17 +59,6 @@
                     <AudioPlayer :src="it.audio_url" />
                   </div>
                 </div>
-              </div>
-
-              <!-- Voice Info (if available) -->
-              <div v-if="it.voice_name || it.voice_style" class="mt-3 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 text-gray-400">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.59-.79-1.59-1.75v-4.5c0-.96.71-1.75 1.59-1.75h2.24Z" />
-                </svg>
-                <span class="text-sm text-gray-600">
-                  {{ it.voice_name || '默认语音' }}
-                  <span v-if="it.voice_style" class="text-gray-400">- {{ it.voice_style }}</span>
-                </span>
               </div>
             </div>
           </div>
@@ -123,7 +113,8 @@ export default defineComponent({
       this.loading = true; this.error = ''
       try {
         const res = await historyApi.listTTS({ page: this.page, size: this.size })
-        this.items = (res && (res.items || res.data || [])) || []
+        const data = (res && res.data) || {}
+        this.items = (Array.isArray(data.items) ? data.items : (Array.isArray(res && res.items) ? res.items : []))
       } catch (e) { this.error = e && e.message ? e.message : '加载失败'; try { const { toast } = require('../utils/toast'); toast(this.error, 'error') } catch (e) {} }
       finally { this.loading = false }
     },

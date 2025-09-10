@@ -598,6 +598,8 @@ export default defineComponent({
     const actionLabel = computed(() => {
       if (loading.value || inlineLoading.value || actionLoading.value) return '创作中...'
       if (showInlineCard.value) return '继续创作'
+      const hasText = ((mainText.value || '').trim().length > 0)
+      if (hasText && !!audioUrl.value) return '重新创作'
       if (videoFlowReady.value) return '完成创作'
       return '开始创作'
     })

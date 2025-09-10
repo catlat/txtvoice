@@ -19,6 +19,10 @@ type SvcConfig struct {
 	ASRUrl            string `yaml:"asr_url"`
 	TTSUrl            string `yaml:"tts_url"`
 	TranslateProvider string `yaml:"translate_provider"`
+	// Bilibili 音频处理模式：local | url（默认 local）
+	BilibiliAudioMode string `yaml:"bilibili_audio_mode"`
+	// Bilibili URL 模式策略：raw | proxy（当前实现仅 raw，占位）
+	BilibiliURLStrategy string `yaml:"bilibili_url_strategy"`
 }
 
 func InitSvc() {
@@ -29,6 +33,11 @@ func InitSvc() {
 	mylogin.Init(svcConfig.LoginSvcUrl)
 	// dlyt 始终使用本地实现
 	dlyt.Init("")
+	// 注入 dlyt 运行选项，避免在 dlyt 内部直接读取 config 引起循环依赖
+	dlyt.SetOptions(dlyt.Options{
+		BilibiliAudioMode:   svcConfig.BilibiliAudioMode,
+		BilibiliURLStrategy: svcConfig.BilibiliURLStrategy,
+	})
 	asr.Init(svcConfig.ASRUrl)
 	translate.Init("") // URL在service内部写死
 	tts.Init(svcConfig.TTSUrl)

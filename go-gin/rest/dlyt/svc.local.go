@@ -375,11 +375,29 @@ func (s *LocalYtSvc) AudioWithPlatform(ctx context.Context, idOrUrl, platform st
 		sourceSite = "youtube" // 向后兼容
 	}
 
-	// DB 命中音频直链则直接返回；如非本地静态链接则使用 yt-dlp 直接下载到本地
+	// 从 dlyt 包级配置读取（由 config.InitSvc 注入），用于控制 B站音频模式
+	biliMode := strings.ToLower(strings.TrimSpace(pkgOptions.BilibiliAudioMode))
+
+	// DB 命中音频直链则直接返回；如非本地静态链接则使用 yt-dlp 直接下载到本地（在 B站 URL 模式下跳过镜像）
 	var video model.YoutubeVideo
 	if err := db.WithContext(ctx).Where("source_site = ? AND video_id = ?", sourceSite, videoId).First(&video).Error(); err == nil {
 		if strings.TrimSpace(video.AudioUrl) != "" {
 			log.Printf("yt.audio db_hit video_id=%s current_url=%s is_local=%v", video.VideoId, video.AudioUrl, isLocalStaticURL(video.AudioUrl))
+			// 若为 B站且处于 URL 模式
+			if videoSource == "bilibili" && biliMode == "url" {
+				// 如果 DB 中存的是本地静态文件，则忽略并实时获取直链返回
+				if isLocalStaticURL(video.AudioUrl) {
+					bestURL, gerr := ytdl.GetBestAudioURLWithPlatform(ctx, fullURL, videoSource)
+					if gerr == nil && strings.TrimSpace(bestURL) != "" {
+						log.Printf("yt.audio bili_url_mode_db_local_override video_id=%s url=%s", video.VideoId, bestURL)
+						return &AudioResp{Id: video.VideoId, Title: video.Title, AudioUrl: bestURL}, nil
+					}
+					log.Printf("yt.audio bili_url_mode_db_local_override_failed fallback_db video_id=%s err=%v", video.VideoId, gerr)
+				}
+				// DB 中不是本地静态（可能为远程直链），则直接返回
+				return &AudioResp{Id: video.VideoId, Title: video.Title, AudioUrl: video.AudioUrl}, nil
+			}
+			// 否则保持原有镜像逻辑
 			if !isLocalStaticURL(video.AudioUrl) {
 				outBase := filepath.Join("public", "yt", "audio", video.VideoId)
 				if localFile, upErr := ytdl.DownloadAudioToWithPlatform(ctx, fullURL, outBase, videoSource); upErr == nil {
@@ -393,6 +411,16 @@ func (s *LocalYtSvc) AudioWithPlatform(ctx context.Context, idOrUrl, platform st
 			}
 			return &AudioResp{Id: video.VideoId, Title: video.Title, AudioUrl: video.AudioUrl}, nil
 		}
+	}
+
+	// B站 URL 模式：直接返回实时音频直链
+	if videoSource == "bilibili" && biliMode == "url" {
+		bestURL, gerr := ytdl.GetBestAudioURLWithPlatform(ctx, fullURL, videoSource)
+		if gerr == nil && strings.TrimSpace(bestURL) != "" {
+			log.Printf("yt.audio bili_url_mode video_id=%s url=%s", videoId, bestURL)
+			return &AudioResp{Id: videoId, Title: video.Title, AudioUrl: bestURL}, nil
+		}
+		log.Printf("yt.audio bili_url_mode_failed fallback_local video_id=%s err=%v", videoId, gerr)
 	}
 
 	// 未命中则直接下载到本地并返回静态路径

@@ -1,17 +1,21 @@
 package model
 
+import (
+	"time"
+)
+
 type TTSHistory struct {
-	Id           int64  `gorm:"column:id;primaryKey" json:"id"`
-	UserIdentity string `gorm:"column:user_identity" json:"user_identity"`
-	TextHash     string `gorm:"column:text_hash" json:"text_hash"`
-	TextPreview  string `gorm:"column:text_preview" json:"text_preview"`
-	CharCount    int    `gorm:"column:char_count" json:"char_count"`
-	Speaker      string `gorm:"column:speaker" json:"speaker"`
-	AudioUrl     string `gorm:"column:audio_url" json:"audio_url"`
-	RequestId    string `gorm:"column:request_id" json:"request_id"`
-	Status       int    `gorm:"column:status" json:"status"`
-	CreatedAt    string `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt    string `gorm:"column:updated_at" json:"updated_at"`
+	Id           int64     `gorm:"column:id;primaryKey" json:"id"`
+	UserIdentity string    `gorm:"column:user_identity" json:"user_identity"`
+	TextHash     string    `gorm:"column:text_hash" json:"text_hash"`
+	TextPreview  string    `gorm:"column:text_preview" json:"text_preview"`
+	CharCount    int       `gorm:"column:char_count" json:"char_count"`
+	Speaker      string    `gorm:"column:speaker" json:"speaker"`
+	AudioUrl     string    `gorm:"column:audio_url" json:"audio_url"`
+	RequestId    string    `gorm:"column:request_id" json:"request_id"`
+	Status       int       `gorm:"column:status" json:"status"`
+	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt    time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
 
 func (TTSHistory) TableName() string { return "tts_history" }

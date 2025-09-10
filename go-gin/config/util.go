@@ -25,3 +25,7 @@ func GetDbConf() db.Config {
 func GetMonitorConf() MonitorConfig {
 	return instance.Monitor
 }
+
+func GetSvcConf() SvcConfig {
+	return instance.Svc
+}
