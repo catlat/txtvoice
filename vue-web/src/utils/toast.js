@@ -2,7 +2,7 @@ import { reactive } from 'vue'
 
 export const toastState = reactive({ show: false, message: '', kind: 'info' })
 
-export function toast(message, kind = 'info', duration = 2000) {
+export function toast(message, kind = 'info', duration = 3000) {
   toastState.message = String(message || '')
   toastState.kind = kind
   toastState.show = true

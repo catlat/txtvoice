@@ -1,9 +1,10 @@
 import { getToken, getIdentity } from '../utils/auth'
+import { toast } from '../utils/toast'
 
 // const BASE = 'http://43.133.180.227:9005/api'
-// const BASE = 'http://180.163.81.250:6020/api'
+const BASE = 'http://180.163.81.250:6020/api'
 // const BASE = 'http://127.0.0.1:9005/api'
- const BASE = '/api'
+//  const BASE = '/api'
 function resolveUrl(path) {
   if (path.startsWith('http')) return path
   return `${BASE}${path}`
@@ -39,24 +40,34 @@ export async function request(path, options = {}) {
   if (data !== undefined) init.body = typeof data === 'string' ? data : JSON.stringify(data)
   try {
     const res = await fetch(resolveUrl(path), init)
-    const contentType = res.headers.get('content-type') || ''
-    const isJson = contentType.includes('application/json')
-    const payload = isJson ? await res.json().catch(() => ({})) : await res.text()
+    // 更稳健的解析：总是先以文本读取，再尝试 JSON 解析（兼容后端 content-type 配置错误的情况）
+    let payload = null
+    let isJson = false
+    const rawText = await res.text().catch(() => '')
+    try {
+      payload = rawText ? JSON.parse(rawText) : {}
+      isJson = payload && typeof payload === 'object'
+    } catch (_) {
+      payload = rawText
+      isJson = false
+    }
 
     // HTTP 层错误
     if (!res.ok) {
       const message = extractBizMessage(payload, res.statusText || '请求失败')
-      try { const { toast } = require('../utils/toast'); toast(message, 'error') } catch (e) {}
+      try { toast(message, 'error') } catch (e) {}
       throw new Error(message)
     }
 
     // 业务层错误（即使 HTTP 200）
     if (isJson && payload && typeof payload === 'object') {
-      const bizCode = extractBizCode(payload)
+      let bizCode = extractBizCode(payload)
+      // 兼容字符串业务码，例如 "20030"
+      if (typeof bizCode === 'string' && /^\d+$/.test(bizCode)) bizCode = Number(bizCode)
       // 约定：0 / 200 / 20000 / undefined 视为成功，其它非零为错误
       if (bizCode !== undefined && bizCode !== 0 && bizCode !== 200 && bizCode !== 20000) {
         const message = extractBizMessage(payload, `请求失败(${bizCode})`)
-        try { const { toast } = require('../utils/toast'); toast(message, 'error') } catch (e) {}
+        try { toast(message, 'error') } catch (e) {}
         throw new Error(message)
       }
     }
@@ -64,7 +75,7 @@ export async function request(path, options = {}) {
     return payload
   } catch (err) {
     const msg = err && err.message ? err.message : '网络错误，请稍后再试'
-    try { const { toast } = require('../utils/toast'); toast(msg, 'error') } catch (e) {}
+    try { toast(msg, 'error') } catch (e) {}
     throw err
   }
 }
