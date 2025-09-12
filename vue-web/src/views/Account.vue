@@ -22,12 +22,17 @@
               <input 
                 v-model="identity" 
                 class="w-full px-4 py-3 border border-gray-300/70 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent" 
-                placeholder="输入手机号或标识" 
+                placeholder="输入手机号" 
+              />
+              <input 
+                v-model="password" type="password"
+                class="w-full px-4 py-3 border border-gray-300/70 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent" 
+                placeholder="输入密码（默认=手机号）" 
               />
               <button 
                 class="w-full px-4 py-3 bg-gradient-to-r from-indigo-400 to-cyan-400 text-white font-medium rounded-lg hover:from-indigo-500 hover:to-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200" 
                 @click="doLogin" 
-                :disabled="!identity.trim()"
+                :disabled="!identity.trim() || !password"
               >
                 登录
               </button>
@@ -51,8 +56,8 @@
             
             <!-- User Profile -->
             <div class="flex items-center gap-4 mb-6">
-              <div class="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-400 to-cyan-400 flex items-center justify-center">
-                <span class="text-white text-xl font-medium">{{ identity.charAt(0).toUpperCase() }}</span>
+              <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center border border-gray-200">
+                <span class="text-gray-700 text-xl font-medium">{{ identity.charAt(0).toUpperCase() }}</span>
               </div>
               <div>
                 <div class="text-lg font-semibold text-gray-800">{{ identity }}</div>
@@ -61,10 +66,72 @@
                   注册于 {{ formatDate(profileData.created_at) }}
                 </div>
               </div>
+              <div class="ml-auto">
+                <button
+                  class="px-3 py-1.5 text-sm border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 transition-colors"
+                  @click="togglePasswordForm"
+                >
+                  {{ showPasswordForm ? '收起' : '修改密码' }}
+                </button>
+              </div>
             </div>
 
+            <!-- 修改密码（折叠区域） -->
+            <div v-if="showPasswordForm" class="mt-2 max-w-md border border-gray-200 rounded-lg p-4 bg-white" autocomplete="off">
+              <div class="space-y-3">
+                <label class="block">
+                  <span class="block mb-1 text-sm text-gray-600">新密码</span>
+                  <input
+                    v-model="newPassword"
+                    :readonly="antiFill"
+                    @focus="antiFill = false"
+                    type="password"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-transparent"
+                    placeholder="至少 6 位"
+                    name="new-password"
+                    autocomplete="new-password"
+                    inputmode="text"
+                    autocapitalize="off"
+                    autocorrect="off"
+                    spellcheck="false"
+                  />
+                </label>
+                <label class="block">
+                  <span class="block mb-1 text-sm text-gray-600">确认新密码</span>
+                  <input
+                    v-model="confirmPassword"
+                    :readonly="antiFill"
+                    @focus="antiFill = false"
+                    type="password"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-transparent"
+                    placeholder="再次输入新密码"
+                    name="confirm-password"
+                    autocomplete="new-password"
+                    inputmode="text"
+                    autocapitalize="off"
+                    autocorrect="off"
+                    spellcheck="false"
+                  />
+                </label>
+                <div v-if="passwordMismatch" class="text-xs text-red-600">两次输入不一致</div>
+                <div class="flex items-center gap-3 pt-1">
+                  <button
+                    class="px-4 py-2 rounded-md bg-gray-200 text-gray-800 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    :disabled="!canSubmit || isSubmitting"
+                    @click="doChangePassword"
+                  >保存</button>
+                  <button
+                    class="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100"
+                    @click="cancelPasswordChange"
+                  >取消</button>
+                </div>
+              </div>
+            </div>
+
+            
+            
             <!-- Package Summary -->
-            <div v-if="packages.length" class="border-t pt-6">
+            <div v-if="packages.length" class="border-t pt-6 mt-6">
               <h4 class="text-lg font-medium text-gray-800 mb-4">我的套餐</h4>
               <div class="space-y-6">
                 <div v-for="(p, idx) in packages" :key="idx" class="bg-white/80 backdrop-blur rounded-xl border border-gray-200 p-6 shadow-sm">
@@ -74,12 +141,12 @@
                       <h5 class="text-lg font-semibold text-gray-800">{{ p.package_name || ('套餐 #' + (p.package_id || idx + 1)) }}</h5>
                       <div class="text-sm text-gray-600 mt-1 flex items-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5a2.25 2.25 0 0 0 2.25-2.25m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5a2.25 2.25 0 0 1 2.25-2.25V18.75M9 10.5h6" />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5a2.25 2.25 0 0 1 2.25-2.25m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5a2.25 2.25 0 0 1 2.25-2.25V18.75M9 10.5h6" />
                         </svg>
                         到期: {{ formatDate(p.expire_at) }}
                       </div>
                     </div>
-                    <div class="text-xs bg-gradient-to-r from-emerald-400 to-emerald-500 text-white px-3 py-1.5 rounded-full shadow-sm">
+                    <div class="text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-full border border-gray-200">
                       有效
                     </div>
                   </div>
@@ -97,7 +164,7 @@
                     </div>
                     <div class="w-full bg-gray-100 rounded-full h-2.5">
                       <div 
-                        class="bg-gradient-to-r from-sky-400 to-sky-500 h-2.5 rounded-full transition-all duration-500"
+                        class="bg-gray-400 h-2.5 rounded-full transition-all duration-500"
                         :style="{ width: getUsagePercentage('asr', p) + '%' }"
                       ></div>
                     </div>
@@ -120,7 +187,7 @@
                     </div>
                     <div class="w-full bg-gray-100 rounded-full h-2.5">
                       <div 
-                        class="bg-gradient-to-r from-indigo-400 to-indigo-500 h-2.5 rounded-full transition-all duration-500"
+                        class="bg-gray-400 h-2.5 rounded-full transition-all duration-500"
                         :style="{ width: getUsagePercentage('tts', p) + '%' }"
                       ></div>
                     </div>
@@ -150,7 +217,7 @@
                 <h3 class="text-xl font-semibold text-gray-800">使用统计</h3>
                 <div class="text-sm text-gray-500 mt-1">近30天使用概览</div>
               </div>
-              <button @click="refresh" class="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+              <button @click="refresh" class="text-sm text-gray-600 hover:text-gray-700 flex items-center gap-1">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
                 </svg>
@@ -162,17 +229,17 @@
             <div v-if="usageDays.length" class="space-y-4">
               <!-- 总计统计 -->
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-gradient-to-r from-sky-400 to-sky-500 text-white rounded-lg p-4 text-center">
-                  <div class="text-2xl font-bold">{{ formatNumber(totalAsrChars) }}</div>
-                  <div class="text-blue-100 text-sm">语音识别总计</div>
+                <div class="bg-white border border-gray-200 rounded-lg p-4 text-center">
+                  <div class="text-2xl font-bold text-gray-800">{{ formatNumber(totalAsrChars) }}</div>
+                  <div class="text-gray-500 text-sm">语音识别总计</div>
                 </div>
-                <div class="bg-gradient-to-r from-emerald-400 to-emerald-500 text-white rounded-lg p-4 text-center">
-                  <div class="text-2xl font-bold">{{ formatNumber(totalTtsChars) }}</div>
-                  <div class="text-green-100 text-sm">语音合成总计</div>
+                <div class="bg-white border border-gray-200 rounded-lg p-4 text-center">
+                  <div class="text-2xl font-bold text-gray-800">{{ formatNumber(totalTtsChars) }}</div>
+                  <div class="text-gray-500 text-sm">语音合成总计</div>
                 </div>
-                <div class="bg-gradient-to-r from-indigo-400 to-indigo-500 text-white rounded-lg p-4 text-center">
-                  <div class="text-2xl font-bold">{{ totalRequests }}</div>
-                  <div class="text-purple-100 text-sm">请求总数</div>
+                <div class="bg-white border border-gray-200 rounded-lg p-4 text-center">
+                  <div class="text-2xl font-bold text-gray-800">{{ totalRequests }}</div>
+                  <div class="text-gray-500 text-sm">请求总数</div>
                 </div>
               </div>
               
@@ -186,8 +253,8 @@
                   <div v-for="day in activeDays.slice(0, 6)" :key="day.date" class="bg-white/80 rounded-lg p-3 border border-gray-100">
                     <div class="font-medium text-gray-800">{{ formatDate(day.date) }}</div>
                     <div class="flex gap-2 text-xs text-gray-600 mt-1">
-                      <span v-if="day.asr_chars > 0" class="bg-sky-100 text-sky-700 px-2 py-1 rounded">识别{{ formatNumber(day.asr_chars) }}</span>
-                      <span v-if="day.tts_chars > 0" class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded">合成{{ formatNumber(day.tts_chars) }}</span>
+                      <span v-if="day.asr_chars > 0" class="bg-gray-100 text-gray-700 px-2 py-1 rounded border border-gray-200">识别{{ formatNumber(day.asr_chars) }}</span>
+                      <span v-if="day.tts_chars > 0" class="bg-gray-100 text-gray-700 px-2 py-1 rounded border border-gray-200">合成{{ formatNumber(day.tts_chars) }}</span>
                     </div>
                   </div>
                 </div>
@@ -232,6 +299,12 @@ export default defineComponent({
   data() {
     return {
       identity: getIdentity() || '',
+      password: '',
+      newPassword: '',
+      confirmPassword: '',
+      showPasswordForm: false,
+      isSubmitting: false,
+      antiFill: true,
       token: getToken() || '',
       profileData: null,
       packages: [],
@@ -257,21 +330,49 @@ export default defineComponent({
         (day.tts_chars || 0) > 0 || 
         (day.requests || 0) > 0
       )
+    },
+    passwordMismatch() {
+      if (!this.showPasswordForm) return false
+      if (!this.confirmPassword) return false
+      return this.newPassword !== this.confirmPassword
+    },
+    canSubmit() {
+      return (
+        this.newPassword &&
+        this.confirmPassword &&
+        this.newPassword.length >= 6 &&
+        !this.passwordMismatch
+      )
     }
   },
   created() {
     if (this.identity && this.token) this.refresh()
   },
   methods: {
+    togglePasswordForm() {
+      this.showPasswordForm = !this.showPasswordForm
+      if (!this.showPasswordForm) {
+        this.newPassword = ''
+        this.confirmPassword = ''
+        this.antiFill = true
+      }
+    },
+    cancelPasswordChange() {
+      this.showPasswordForm = false
+      this.newPassword = ''
+      this.confirmPassword = ''
+      this.antiFill = true
+    },
     async doLogin() {
       this.error = ''
       try {
-        const res = await account.loginSimple(this.identity)
+        const res = await account.login(this.identity, this.password)
         const data = res && (res.data || res)
         if (data && data.token) {
           setToken(data.token)
           setIdentity(this.identity)
           this.token = data.token
+          this.password = ''
           await this.refresh()
         } else {
           throw new Error('未返回 token')
@@ -283,6 +384,22 @@ export default defineComponent({
       try { await account.logout(this.token); const { toast } = require('../utils/toast'); toast('已退出', 'success') } catch (e) {}
       clearToken(); clearIdentity(); this.token = ''; this.identity = ''
       this.profileData = null; this.packages = []; this.usageDays = []
+    },
+    async doChangePassword() {
+      this.error = ''
+      if (!this.canSubmit) return
+      this.isSubmitting = true
+      try {
+        await account.changePassword(this.newPassword)
+        this.newPassword = ''
+        this.confirmPassword = ''
+        this.showPasswordForm = false
+        this.antiFill = true
+        try { const { toast } = require('../utils/toast'); toast('密码已更新', 'success') } catch (e) {}
+      } catch (e) {
+        this.error = e && e.message ? e.message : '修改密码失败'
+        try { const { toast } = require('../utils/toast'); toast(this.error, 'error') } catch (e2) {}
+      } finally { this.isSubmitting = false }
     },
     async refresh() {
       try {

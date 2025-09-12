@@ -59,11 +59,16 @@
         <input 
           v-model="identity" 
           class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
-          placeholder="请输入手机号或标识" 
+          placeholder="请输入手机号" 
+        />
+        <input 
+          v-model="password" type="password"
+          class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
+          placeholder="请输入密码（默认=手机号）" 
         />
         <button 
           @click="onLogin" 
-          :disabled="!identity.trim()"
+          :disabled="!identity.trim() || !password"
           class="w-full px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-medium rounded-md transition-all duration-200 hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           登录
@@ -165,6 +170,7 @@ export default defineComponent({
       { text: '账号管理', to: '/account', icon: 'UserIcon' },
     ],
     identity: getIdentity() || '',
+    password: '',
     token: getToken() || '',
     userInfo: null,
     open: false,
@@ -233,11 +239,12 @@ export default defineComponent({
     },
     async onLogin() {
       try {
-        const res = await account.loginSimple(this.identity)
+        const res = await account.login(this.identity, this.password)
         const data = res && (res.data || res)
         if (data && data.token) {
           setToken(data.token); setIdentity(this.identity)
           this.token = data.token
+          this.password = ''
           this.$emit('login', { token: data.token, identity: this.identity })
           await this.loadUserInfo()
         }
@@ -246,11 +253,12 @@ export default defineComponent({
     async onLogout() {
       try { await account.logout(this.token) } catch (e) {}
       clearToken(); clearIdentity(); 
-      this.token = ''; this.identity = ''; this.userInfo = null; this.open = false
+      this.token = ''; this.identity = ''; this.password = ''; this.userInfo = null; this.open = false
       this.$emit('logout')
     },
   },
 })
 </script>
+
 
 

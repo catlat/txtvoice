@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"go-gin/const/errcode"
 	"go-gin/internal/httpx"
 	"go-gin/internal/httpx/validators"
 	"go-gin/logic"
@@ -14,7 +15,12 @@ type authController struct{}
 var AuthController = &authController{}
 
 func (c *authController) LoginSimple(ctx *httpx.Context) (any, error) {
-	var req typing.LoginSimpleReq
+	// 禁用懒注册登录
+	return nil, errcode.ErrUserMustLogin
+}
+
+func (c *authController) Login(ctx *httpx.Context) (any, error) {
+	var req typing.PhoneLoginReq
 	if err := ctx.ShouldBind(&req); err != nil {
 		return nil, err
 	}
@@ -22,7 +28,7 @@ func (c *authController) LoginSimple(ctx *httpx.Context) (any, error) {
 		return nil, err
 	}
 	l := logic.NewAuthLogic()
-	resp, err := l.LoginSimple(ctx, req.Identity)
+	resp, err := l.LoginWithPassword(ctx, req.Phone, req.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -37,6 +43,26 @@ func (c *authController) LoginSimple(ctx *httpx.Context) (any, error) {
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 	})
 	return resp, nil
+}
+
+func (c *authController) ChangePassword(ctx *httpx.Context) (any, error) {
+	var req typing.ChangePasswordReq
+	if err := ctx.ShouldBind(&req); err != nil {
+		return nil, err
+	}
+	if err := validators.Validate(&req); err != nil {
+		return nil, err
+	}
+	// 解析当前身份
+	identity := httpx.Identity(ctx)
+	if identity == "" {
+		return nil, errcode.ErrUserMustLogin
+	}
+	l := logic.NewAuthLogic()
+	if err := l.ChangePassword(ctx, identity, req.NewPassword); err != nil {
+		return nil, err
+	}
+	return map[string]any{"changed": true}, nil
 }
 
 func (c *authController) Logout(ctx *httpx.Context) (any, error) {
