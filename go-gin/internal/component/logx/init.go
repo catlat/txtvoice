@@ -41,6 +41,10 @@ func Init() {
 	if err != nil {
 		level = zerolog.InfoLevel
 	}
+	// In debug mode, emit Debug logs to console/files
+	if environment.IsDebugMode() {
+		level = zerolog.DebugLevel
+	}
 	zerolog.TimeFieldFormat = time.DateTime
 	zerolog.LevelFieldMarshalFunc = func(l zerolog.Level) string {
 		return strings.ToUpper(l.String())
@@ -64,8 +68,8 @@ func initDefaultInstance(l zerolog.Level) zerolog.Logger {
 		writers = append(writers, &ConsoleLevelWriter{})
 	}
 	multi := zerolog.MultiLevelWriter(writers...)
-	log.Output(multi).Level(l).With().Logger().Hook(TracingHook{})
-	return zerolog.Nop()
+	// return a configured logger instead of NOP
+	return zerolog.New(multi).Level(l).With().Timestamp().Logger().Hook(TracingHook{})
 }
 
 func initLoggerInstance(path string) zerolog.Logger {

@@ -47,14 +47,38 @@ func (l *DBLog) LogMode(level logger.LogLevel) logger.Interface {
 
 // Info print info
 func (l *DBLog) Info(ctx context.Context, msg string, data ...any) {
+	if l.LogLevel < logger.Info {
+		return
+	}
+	if len(data) == 0 {
+		logx.WithContext(ctx).Info("gorm", msg)
+		return
+	}
+	logx.WithContext(ctx).Infof("gorm", msg, data...)
 }
 
 // Warn print warn messages
 func (l *DBLog) Warn(ctx context.Context, msg string, data ...any) {
+	if l.LogLevel < logger.Warn {
+		return
+	}
+	if len(data) == 0 {
+		logx.WithContext(ctx).Warn("gorm", msg)
+		return
+	}
+	logx.WithContext(ctx).Warnf("gorm", msg, data...)
 }
 
 // Error print error messages
 func (l *DBLog) Error(ctx context.Context, msg string, data ...any) {
+	if l.LogLevel < logger.Error {
+		return
+	}
+	if len(data) == 0 {
+		logx.WithContext(ctx).Error("gorm", msg)
+		return
+	}
+	logx.WithContext(ctx).Errorf("gorm", msg, data...)
 }
 
 // Trace print sql message

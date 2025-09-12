@@ -81,7 +81,7 @@ func (s *TranslateSvc) TranslateToZh(ctx context.Context, text string) (resp *Tr
 		"messages": []map[string]string{
 			{
 				"role":    "system",
-				"content": "你是一个专业的翻译助手。请将用户提供的英文文本翻译成中文，保持原意和语言风格。请直接返回翻译后的中文文本，不要添加任何解释或前缀。",
+				"content": "你是一个专业的翻译助手。请将用户提供的英文文本翻译成中文，保持原意和语言风格。请直接返回翻译后的中文文本，不要添加任何解释或前缀，不要包含任何英文内容。",
 			},
 			{
 				"role":    "user",

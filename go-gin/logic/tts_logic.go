@@ -11,7 +11,10 @@ import (
 	"go-gin/internal/component/logx"
 	"go-gin/internal/metrics"
 	"go-gin/model"
+	"go-gin/rest/dlyt"
 	"go-gin/rest/tts"
+	"strings"
+	"time"
 )
 
 type TTSLogic struct{}
@@ -85,19 +88,43 @@ func (l *TTSLogic) Synthesize(ctx context.Context, identity, text, speaker strin
 		return nil, err
 	}
 
-	// 生成可用的 audio_url（若服务未返回直链，则使用内联 dataURL）
-	audioURL := resp.AudioUrl
+	// 将音频保存到七牛云，数据库仅存公网链接
+	audioURL := ""
+	// 构造稳定的对象键：tts/{identity}/{hash8}-{unix}.mp3
+	hash8 := textHash
+	if len(hash8) > 8 {
+		hash8 = textHash[:8]
+	}
+	safeIdentity := strings.ReplaceAll(identity, "|", "_")
+	key := fmt.Sprintf("tts/%s/%s-%d.mp3", safeIdentity, hash8, time.Now().Unix())
+
+	// 优先服务端 Fetch（如果上游给了 URL），否则直接上传字节
+	var upErr error
+	if strings.TrimSpace(resp.AudioUrl) != "" {
+		if url, err := dlyt.FetchToQiniu(ctx, key, resp.AudioUrl); err == nil {
+			audioURL = url
+		} else {
+			upErr = err
+		}
+	}
+	if audioURL == "" && len(resp.Audio) > 0 {
+		if url, err := dlyt.UploadBytesToQiniu(ctx, key, resp.Audio, "audio/mpeg"); err == nil {
+			audioURL = url
+		} else {
+			upErr = err
+		}
+	}
+	// 七牛不可用或上传失败时回退为 data URL，保证不阻断主流程
 	if audioURL == "" && len(resp.Audio) > 0 {
 		encoded := base64.StdEncoding.EncodeToString(resp.Audio)
 		audioURL = "data:audio/mp3;base64," + encoded
+		if upErr != nil {
+			logx.WithContext(ctx).Warn("tts_qiniu_upload_failed_fallback", map[string]any{"err": upErr.Error()})
+		}
 	}
 
 	// 入库
 	preview := text
-	r := []rune(preview)
-	if len(r) > 255 {
-		preview = string(r[:255])
-	}
 	item = model.TTSHistory{
 		UserIdentity: identity,
 		TextHash:     textHash,

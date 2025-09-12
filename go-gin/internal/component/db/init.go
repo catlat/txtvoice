@@ -3,8 +3,11 @@ package db
 import (
 	"context"
 
+	"go-gin/internal/environment"
+
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var (
@@ -35,6 +38,10 @@ func IsConnected() bool {
 }
 
 func Connect() (err error) {
+	level := ParseLevel(conf.LogLevel)
+	if environment.IsDebugMode() {
+		level = logger.Info
+	}
 	instance, err = gorm.Open(mysql.New(mysql.Config{
 		DSN:                       conf.DSN, // DSN data source name
 		DefaultStringSize:         256,      // string 类型字段的默认长度
@@ -44,7 +51,7 @@ func Connect() (err error) {
 		SkipInitializeWithVersion: false,    // 根据当前 MySQL 版本自动配置
 	}), &gorm.Config{
 		Logger: &DBLog{
-			LogLevel: ParseLevel(conf.LogLevel),
+			LogLevel: level,
 		},
 	})
 	if err != nil {

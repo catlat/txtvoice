@@ -7,6 +7,7 @@ import (
 func Init(route *httpx.Engine) {
 	RegisterCommonRoutes(route)
 	RegisterLoginRoutes(route.Group("/"))
+	RegisterAdminRoutes(route.Group("/"))
 
 	api := route.Group("/api")
 	RegisterApiRoutes(api)
@@ -15,7 +16,6 @@ func Init(route *httpx.Engine) {
 	RegisterHistoryRoutes(api)
 	RegisterAccountRoutes(api)
 	RegisterAuthRoutes(api)
-	RegisterAdminRoutes(api)
 
 	RegisterDemoRoutes(route.Group("/demo"))
 
