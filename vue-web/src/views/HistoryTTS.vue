@@ -8,8 +8,11 @@
       </div>
 
       <!-- Main Content -->
-      <div class="max-w-4xl mx-auto">
-        <div class="bg-white rounded-xl border border-gray-200 shadow-[0_0_16px_0_rgba(0,0,0,0.06)] overflow-hidden">
+      <!-- Login Section (if not logged in) -->
+      <LoginRequired v-if="!token" title="未登录" description="请登录后查看语音合成历史记录" />
+
+      <div v-else class="max-w-4xl mx-auto">
+        <div>
           <!-- Loading State -->
           <div v-if="loading" class="p-8 text-center">
             <div class="flex items-center justify-center gap-3">
@@ -29,78 +32,83 @@
           </div>
 
           <!-- Content -->
-          <div v-else-if="items.length" class="divide-y divide-gray-100">
-            <div v-for="(it, idx) in items" :key="idx" class="p-4 hover:bg-gray-50 transition-colors duration-200">
-              <!-- Header Information - 紧凑单行布局 -->
-              <div class="mb-3">
-                <!-- 第一行：时间、字符数、音色 -->
-                <div class="flex items-center justify-between text-sm text-gray-500 mb-2">
-                  <div class="flex items-center gap-4">
-                    <div class="flex items-center gap-1">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                      </svg>
-                      <span>{{ formatDate(it.created_at) }}</span>
+          <div v-else-if="items.length" class="p-3 md:p-4">
+            <div class="grid grid-cols-1 gap-3 md:gap-4">
+              <div v-for="(it, idx) in items" :key="idx" class="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
+                <div class="p-4 md:p-5">
+                  <!-- Header Information - 紧凑单行布局 -->
+                  <div class="mb-3">
+                    <!-- 第一行：时间、字符数、音色 -->
+                    <div class="flex items-center justify-between text-xs md:text-sm text-gray-500 mb-2">
+                      <div class="flex items-center gap-3 md:gap-4">
+                        <div class="flex items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                          </svg>
+                          <span>{{ formatDate(it.created_at) }}</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.627 2.707-3.227V6.741c0-1.6-1.123-2.994-2.707-3.227A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.514C3.373 3.747 2.25 5.14 2.25 6.741v6.018Z" />
+                          </svg>
+                          <span>{{ it.char_count || 0 }} 字符</span>
+                        </div>
+                        <div v-if="it.speaker" class="flex items-center gap-1 text-gray-600">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.59-.79-1.59-1.75v-4.5c0-.96.71-1.75 1.59-1.75h2.24Z" />
+                          </svg>
+                          <span class="font-medium">{{ getVoiceName(it.speaker) }}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div class="flex items-center gap-1">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.627 2.707-3.227V6.741c0-1.6-1.123-2.994-2.707-3.227A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.514C3.373 3.747 2.25 5.14 2.25 6.741v6.018Z" />
-                      </svg>
-                      <span>{{ it.char_count || 0 }} 字符</span>
-                    </div>
-                    <div v-if="it.speaker" class="flex items-center gap-1 text-blue-600">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.59-.79-1.59-1.75v-4.5c0-.96.71-1.75 1.59-1.75h2.24Z" />
-                      </svg>
-                      <span class="font-medium">{{ getVoiceName(it.speaker) }}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- 文本预览 - 可展开折叠 -->
-                <div class="text-gray-900 leading-relaxed">
-                  <div 
-                    class="cursor-pointer select-none"
-                    @click="toggleTextExpand(idx)"
-                  >
-                    <p 
-                      :class="[
-                        'text-sm transition-all duration-200',
-                        expandedTexts[idx] ? '' : 'line-clamp-2'
-                      ]"
-                    >
-                      {{ it.text_preview || '无文本内容' }}
-                    </p>
-                    <div 
-                      v-if="isTextLong(it.text_preview)" 
-                      class="flex items-center gap-1 mt-1 text-xs text-blue-600 hover:text-blue-700"
-                    >
-                      <span>{{ expandedTexts[idx] ? '收起' : '展开' }}</span>
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        fill="none" 
-                        viewBox="0 0 24 24" 
-                        stroke-width="1.5" 
-                        stroke="currentColor" 
-                        :class="[
-                          'w-3 h-3 transition-transform duration-200',
-                          expandedTexts[idx] ? 'rotate-180' : ''
-                        ]"
+                    
+                    <!-- 文本预览 - 可展开折叠 -->
+                    <div class="text-gray-900 leading-relaxed">
+                      <div 
+                        class="cursor-pointer select-none"
+                        @click="toggleTextExpand(idx)"
                       >
-                        <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                      </svg>
+                        <p 
+                          :class="[
+                            'text-sm md:text-base transition-all duration-200',
+                            expandedTexts[idx] ? '' : 'line-clamp-2'
+                          ]"
+                        >
+                          {{ it.text_preview || '无文本内容' }}
+                        </p>
+                        <div 
+                          v-if="isTextLong(it.text_preview)" 
+                          class="flex items-center gap-1 mt-1 text-xs text-gray-500 hover:text-gray-700"
+                        >
+                          <span>{{ expandedTexts[idx] ? '收起' : '展开' }}</span>
+                          <svg 
+                            xmlns="http://www.w3.org/2000/svg" 
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke-width="1.5" 
+                            stroke="currentColor" 
+                            :class="[
+                              'w-3 h-3 transition-transform duration-200',
+                              expandedTexts[idx] ? 'rotate-180' : ''
+                            ]"
+                          >
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                          </svg>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              <!-- Audio Player Row -->
-              <div v-if="it.audio_url" class="pt-2 border-t border-gray-100">
-                <AudioPlayer 
-                  :src="it.audio_url" 
-                  :show-download="true"
-                  :label="it.text_preview"
-                />
+                  <!-- Audio Player Row -->
+                  <div v-if="it.audio_url" class="pt-3 md:pt-4 border-t border-gray-100">
+                    <AudioPlayer 
+                      :src="it.audio_url" 
+                      :show-download="true"
+                      :show-speed-control="true"
+                      :label="it.text_preview"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -116,68 +124,21 @@
 
           <!-- Pagination -->
           <div v-if="items.length" class="px-6 py-4 bg-gray-50 border-t border-gray-100">
-            <!-- 数据统计信息 -->
             <div class="flex items-center justify-center mb-4 text-sm text-gray-600">
               <span v-if="pagination.total > 0">
                 共 {{ pagination.total }} 条记录，第 {{ page }} / {{ pagination.total_pages }} 页
               </span>
               <span v-else>第 {{ page }} 页</span>
             </div>
-            
-            <!-- 分页按钮 -->
-            <div class="flex items-center justify-between">
-              <button 
-                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200" 
-                :disabled="!pagination.has_prev" 
-                @click="changePage(page-1)"
-              >
-                上一页
-              </button>
-              
-              <!-- 页码显示 -->
-              <div class="flex items-center gap-2">
-                <template v-if="pagination.total_pages > 0">
-                  <!-- 第一页 -->
-                  <button 
-                    v-if="page > 3"
-                    class="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200"
-                    @click="changePage(1)"
-                  >
-                    1
-                  </button>
-                  <span v-if="page > 4" class="text-gray-400">...</span>
-                  
-                  <!-- 当前页附近的页码 -->
-                  <template v-for="p in getVisiblePages()" :key="p">
-                    <button 
-                      class="px-3 py-2 text-sm border rounded-md transition-colors duration-200"
-                      :class="p === page ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300 hover:bg-gray-50'"
-                      @click="changePage(p)"
-                    >
-                      {{ p }}
-                    </button>
-                  </template>
-                  
-                  <!-- 最后一页 -->
-                  <span v-if="page < pagination.total_pages - 3" class="text-gray-400">...</span>
-                  <button 
-                    v-if="page < pagination.total_pages - 2"
-                    class="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200"
-                    @click="changePage(pagination.total_pages)"
-                  >
-                    {{ pagination.total_pages }}
-                  </button>
-                </template>
-              </div>
-              
-              <button 
-                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200" 
-                :disabled="!pagination.has_next" 
-                @click="changePage(page+1)"
-              >
-                下一页
-              </button>
-            </div>
+            <Pagination
+              :page="page"
+              :page-size="size"
+              :total="pagination.total"
+              :total-pages="pagination.total_pages"
+              :has-prev="pagination.has_prev"
+              :has-next="pagination.has_next"
+              @update:page="changePage"
+            />
           </div>
         </div>
       </div>
@@ -187,19 +148,23 @@
 
 <script>
 import { defineComponent } from 'vue'
+import { getToken } from '../utils/auth'
 import * as historyApi from '../api/history'
 import AudioPlayer from '../components/AudioPlayer.vue'
 import Spinner from '../components/Spinner.vue'
+import Pagination from '../components/Pagination.vue'
+import LoginRequired from '../components/LoginRequired.vue'
 
 export default defineComponent({
-  components: { AudioPlayer, Spinner },
+  components: { AudioPlayer, Spinner, Pagination, LoginRequired },
   data() {
     return { 
       loading: false, 
       error: '', 
       items: [], 
       page: 1, 
-      size: 20,
+      size: 10,
+      token: getToken() || '',
       pagination: {
         total: 0,
         total_pages: 0,
@@ -212,7 +177,7 @@ export default defineComponent({
   },
   created() { 
     this.loadVoices()
-    this.fetch() 
+    if (this.token) this.fetch() 
   },
   methods: {
     async fetch() {

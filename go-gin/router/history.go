@@ -3,12 +3,11 @@ package router
 import (
 	"go-gin/controller"
 	"go-gin/internal/httpx"
+	"go-gin/middleware"
 )
 
 // RegisterHistoryRoutes 注册历史查询路由
 func RegisterHistoryRoutes(r *httpx.RouterGroup) {
-	r.GET("/history/videos", controller.HistoryController.ListVideos)
-	r.GET("/history/video/:source_site/:video_id", controller.HistoryController.GetVideoDetail)
-	r.GET("/history/tts", controller.HistoryController.ListTTS)
+	g := r.Group("")
+	g.Before(middleware.TokenCheck()).GET("/history/tts", controller.HistoryController.ListTTS)
 }
-

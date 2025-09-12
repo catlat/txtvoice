@@ -24,6 +24,8 @@
 
         <div class="mt-4 text-sm text-gray-500" v-else>未找到视频信息，请返回首页重新输入。</div>
       </div>
+      <!-- 登录弹框 -->
+      <LoginModal v-model="showLogin" @success="showLogin = false" />
     </div>
   </main>
 </template>
@@ -33,14 +35,17 @@ import { defineComponent } from 'vue'
 import VideoCard from '../components/VideoCard.vue'
 import * as yt from '../api/yt'
 import Spinner from '../components/Spinner.vue'
+import LoginModal from '../components/LoginModal.vue'
+import { getToken } from '../utils/auth'
 
 export default defineComponent({
-  components: { VideoCard, Spinner },
+  components: { VideoCard, Spinner, LoginModal },
   data() {
     return {
       loading: false,
       error: '',
       info: null,
+      showLogin: false,
     }
   },
   computed: {
@@ -73,6 +78,7 @@ export default defineComponent({
   methods: {
     async fetchInfo() {
       if (!this.vid) return
+      if (!getToken()) { this.showLogin = true; return }
       this.loading = true
       this.error = ''
       try {
@@ -88,6 +94,7 @@ export default defineComponent({
     },
     async onFetchText() {
       if (!this.vid) return
+      if (!getToken()) { this.showLogin = true; return }
       this.loading = true
       this.error = ''
       try {

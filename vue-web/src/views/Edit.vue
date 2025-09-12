@@ -44,6 +44,9 @@
       </div>
       <div class="mt-2 text-red-600" v-if="error">{{ error }}</div>
     </div>
+
+    <!-- 登录弹框 -->
+    <LoginModal v-model="showLogin" @success="showLogin = false" />
   </main>
 </template>
 
@@ -57,9 +60,11 @@ import AudioPlayer from '../components/AudioPlayer.vue'
 import * as tts from '../api/tts'
 import { normalizeAndCount } from '../utils/text'
 import Spinner from '../components/Spinner.vue'
+import LoginModal from '../components/LoginModal.vue'
+import { getToken } from '../utils/auth'
 
 export default defineComponent({
-  components: { TextEditor, CharCounter, VoiceSelector, GenerateButton, AudioPlayer, Spinner },
+  components: { TextEditor, CharCounter, VoiceSelector, GenerateButton, AudioPlayer, Spinner, LoginModal },
   data() {
     return {
       textEn: sessionStorage.getItem('edit:text_en') || '',
@@ -69,6 +74,7 @@ export default defineComponent({
       error: '',
       audioUrl: '',
       useMyVoice: true, // 默认使用我的声音
+      showLogin: false,
     }
   },
   computed: {
@@ -81,6 +87,7 @@ export default defineComponent({
       this.useMyVoice = !this.useMyVoice
     },
     async onSynthesize() {
+      if (!getToken()) { this.showLogin = true; return }
       this.loading = true
       this.error = ''
       this.audioUrl = ''

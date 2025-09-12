@@ -19,4 +19,5 @@ var (
 
 	// 业务扩展错误
 	ErrUserVoiceNotConfigured = errorx.New(20030, "未配置我的声音")
+	ErrQuotaNotEnough         = errorx.New(20031, "余额不足，请联系管理员或稍后再试")
 )

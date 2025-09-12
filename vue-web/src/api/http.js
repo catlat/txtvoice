@@ -1,4 +1,4 @@
-import { getToken, getIdentity } from '../utils/auth'
+import { getToken } from '../utils/auth'
 import { toast } from '../utils/toast'
 
 // const BASE = 'http://43.133.180.227:9005/api'
@@ -29,14 +29,8 @@ export async function request(path, options = {}) {
     credentials = 'include',
   } = options
   const token = getToken()
-  const identity = getIdentity()
   const init = { method, headers: { 'Content-Type': 'application/json', ...headers }, credentials }
   if (token) init.headers['token'] = token
-  if (identity) {
-    // 追加 identity 查询参数（GET/POST均追加，后端从 query 读取）
-    if (path.includes('?')) path += `&identity=${encodeURIComponent(identity)}`
-    else path += `?identity=${encodeURIComponent(identity)}`
-  }
   if (data !== undefined) init.body = typeof data === 'string' ? data : JSON.stringify(data)
   try {
     const res = await fetch(resolveUrl(path), init)
@@ -95,7 +89,6 @@ export function post(path, data) {
 
 export function postForm(path, formObj) {
   const token = getToken()
-  const identity = getIdentity()
   const params = new URLSearchParams()
   for (const k in formObj || {}) {
     if (formObj[k] !== undefined && formObj[k] !== null) params.append(k, String(formObj[k]))
@@ -103,7 +96,6 @@ export function postForm(path, formObj) {
   const headers = { 'Content-Type': 'application/x-www-form-urlencoded' }
   if (token) headers['token'] = token
   let url = path
-  if (identity) url += (url.includes('?') ? '&' : '?') + `identity=${encodeURIComponent(identity)}`
   return request(url, { method: 'POST', data: params.toString(), headers })
 }
 

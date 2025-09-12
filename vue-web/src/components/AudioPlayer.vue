@@ -13,7 +13,7 @@
       >
         <media-provider></media-provider>
         <media-audio-layout
-          class="text-gray-800 [--media-accent:#2563eb] [--media-controls-color:#1f2937] [--media-button-hover-bg:rgb(0_0_0_/_0.06)] [--media-slider-track-bg:rgb(0_0_0_/_0.12)] [--media-slider-track-progress-bg:rgb(0_0_0_/_0.3)] [--media-slider-thumb-border:1px_solid_#d1d5db] [--media-slider-thumb-bg:#ffffff] [--media-slider-track-height:6px] [--media-slider-thumb-size:14px]"
+          class="text-gray-800 [--media-accent:#111111] [--media-controls-color:#111111] [--media-button-hover-bg:rgb(0_0_0_/_0.06)] [--media-slider-track-bg:rgb(0_0_0_/_0.12)] [--media-slider-track-progress-bg:rgb(0_0_0_/_0.36)] [--media-slider-thumb-border:1px_solid_#d1d5db] [--media-slider-thumb-bg:#ffffff] [--media-slider-track-height:6px] [--media-slider-thumb-size:14px]"
           v-bind:translations.prop="zhCNTranslations"
           v-bind:colorScheme.prop="'light'"
           v-bind:hide-speed.prop="!showSpeedControl"
@@ -177,15 +177,9 @@ export default defineComponent({
   100% { background-position: -200% 0 }
 }
 :where([data-playing] .vds-audio-layout .vds-time-slider .vds-slider-track-fill) {
-  background-image: linear-gradient(
-    90deg,
-    var(--media-brand) 0%,
-    var(--media-brand) 40%,
-    rgba(37, 99, 235, 0.7) 60%,
-    var(--media-brand) 100%
-  ) !important;
-  background-size: 200% 100% !important;
-  animation: vds-track-move 2.2s linear infinite !important;
+  background: rgba(0, 0, 0, 0.85) !important;
+  background-image: none !important;
+  animation: none !important;
 }
 </style>
 

@@ -159,6 +159,9 @@
             <input ref="fileInput" id="file-input" type="file" accept=".txt,.md,.docx" class="sr-only" @change="onFileChange" />
           </form>
 
+          <!-- 登录弹框 -->
+          <LoginModal v-model="showLogin" @success="showLogin = false" />
+
           <!-- TTS 加载遮罩 -->
           <LoadingOverlay 
             :show="loading" 
@@ -221,6 +224,8 @@ import { defineComponent, ref, onMounted, onUnmounted, watch, nextTick, computed
 import { parseTxt, parseMd, parseDocx } from '../utils/file'
 import * as yt from '../api/yt'
 import * as tts from '../api/tts'
+import LoginModal from '../components/LoginModal.vue'
+import { getToken } from '../utils/auth'
 import VideoCard from '../components/VideoCard.vue'
 import VoiceSelector from '../components/VoiceSelector.vue'
 import AudioPlayer from '../components/AudioPlayer.vue'
@@ -228,7 +233,7 @@ import LoadingOverlay from '../components/LoadingOverlay.vue'
 import { normalizeAndCount } from '../utils/text'
 
 export default defineComponent({
-  components: { VideoCard, VoiceSelector, AudioPlayer, LoadingOverlay },
+  components: { VideoCard, VoiceSelector, AudioPlayer, LoadingOverlay, LoginModal },
   setup() {
     const mainText = ref('')
     const fileInput = ref(null)
@@ -557,7 +562,14 @@ export default defineComponent({
     }
 
     // 内联预览视频信息
+    const showLogin = ref(false)
+    function ensureLogin() {
+      if (!getToken()) { showLogin.value = true; return false }
+      return true
+    }
+
     async function previewInlineVideo(url) {
+      if (!ensureLogin()) return
       // 预览视频卡片前清理旧音频，避免误以为与当前流程相关
       audioUrl.value = ''
       inlineLoading.value = true
@@ -584,6 +596,7 @@ export default defineComponent({
 
     // 获取字幕（优化：直接写回输入框，不显示结果卡片/音频）
     async function fetchInlineSubtitles() {
+      if (!ensureLogin()) return
       if (!inlineVideo.value) return
       // 开始“继续创作”前清理旧音频，避免继续创作时仍显示上一条音频
       audioUrl.value = ''
@@ -634,6 +647,7 @@ export default defineComponent({
     // 更换交互已移除（保留右上角删除）
 
     async function onCreate() {
+      if (!ensureLogin()) return
       const text = (mainText.value || '').trim()
       // 若存在视频卡片，执行"继续创作"：获取字幕
       if (showInlineCard.value) {
@@ -753,7 +767,7 @@ export default defineComponent({
       // 我的声音开关
       useMyVoice, toggleMyVoice,
       // 字数限制相关
-      textCount, textCountClass, onTextInput,
+      textCount, textCountClass, onTextInput, showLogin,
     }
   },
 })

@@ -31,7 +31,7 @@ func (c *ytController) Text(ctx *httpx.Context) (any, error) {
 	if err := validators.Validate(&req); err != nil {
 		return nil, err
 	}
-	identity := ctx.Query("identity")
+	identity := httpx.Identity(ctx)
 	l := logic.NewTranscriptLogic()
 	tr, err := l.GetOrCreateWithPlatform(ctx, req.IdOrUrl, req.TargetLan, identity, req.Platform)
 	if err != nil {

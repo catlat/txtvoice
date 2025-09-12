@@ -22,6 +22,12 @@ func (l *TTSLogic) Synthesize(ctx context.Context, identity, text, speaker strin
 	// 简洁日志记录
 	fmt.Printf("TTS START: identity=%s useMyVoice=%v textLen=%d\n", identity, useMyVoice, len(text))
 
+	// 预检余额（严格：不足直接拒绝）
+	need := len([]rune(text))
+	if ok, err := l.hasEnoughTTSBalance(ctx, identity, need); err == nil && !ok {
+		return nil, errcode.ErrQuotaNotEnough
+	}
+
 	// 决定有效 speaker 与资源（不回退）
 	effectiveSpeaker := speaker
 	resourceId := "volc.service_type.10029" // 大模型语音合成（字符版）
@@ -46,6 +52,11 @@ func (l *TTSLogic) Synthesize(ctx context.Context, identity, text, speaker strin
 	if item.Id != 0 {
 		fmt.Printf("TTS cache hit: id=%d\n", item.Id)
 		logx.WithContext(ctx).Info("tts_history_hit", map[string]any{"id": item.Id, "identity": identity, "speaker": effectiveSpeaker})
+
+		// 缓存命中时也要进行余额预检（按历史记录的字符数）
+		if ok, err := l.hasEnoughTTSBalance(ctx, identity, item.CharCount); err == nil && !ok {
+			return nil, errcode.ErrQuotaNotEnough
+		}
 
 		// 缓存命中时也需要记录使用统计
 		if err := metrics.AddUsage(ctx, identity, 0, item.CharCount, 1); err != nil {
@@ -153,4 +164,18 @@ func (l *TTSLogic) deductTTSBalance(ctx context.Context, identity string, chars 
 	}
 
 	return nil
+}
+
+// hasEnoughTTSBalance 返回是否有足够的 TTS 余额
+func (l *TTSLogic) hasEnoughTTSBalance(ctx context.Context, identity string, need int) (bool, error) {
+	if identity == "" || need <= 0 {
+		return true, nil
+	}
+	var remain int
+	row := db.WithContext(ctx).Raw("SELECT COALESCE(SUM(remain_tts_chars),0) FROM user_package WHERE user_identity = ? AND (expire_at IS NULL OR expire_at > NOW())", identity).Row()
+	if err := row.Err(); err != nil {
+		return true, err // 查询异常时不阻断
+	}
+	_ = row.Scan(&remain)
+	return remain >= need, nil
 }

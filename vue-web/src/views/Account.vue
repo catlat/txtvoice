@@ -10,35 +10,7 @@
       <!-- Main Content -->
       <div class="max-w-4xl mx-auto space-y-6">
         <!-- Login Section (if not logged in) -->
-        <div v-if="!token" class="bg-white/90 backdrop-blur rounded-xl border border-gray-200 shadow-sm p-6">
-          <div class="text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-12 h-12 mx-auto mb-4 text-gray-400">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-            </svg>
-            <h3 class="text-lg font-semibold text-gray-900 mb-2">请先登录</h3>
-            <p class="text-gray-500 mb-6">登录后查看您的账号信息和套餐详情</p>
-            
-            <div class="max-w-sm mx-auto space-y-4">
-              <input 
-                v-model="identity" 
-                class="w-full px-4 py-3 border border-gray-300/70 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent" 
-                placeholder="输入手机号" 
-              />
-              <input 
-                v-model="password" type="password"
-                class="w-full px-4 py-3 border border-gray-300/70 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent" 
-                placeholder="输入密码（默认=手机号）" 
-              />
-              <button 
-                class="w-full px-4 py-3 bg-gradient-to-r from-indigo-400 to-cyan-400 text-white font-medium rounded-lg hover:from-indigo-500 hover:to-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200" 
-                @click="doLogin" 
-                :disabled="!identity.trim() || !password"
-              >
-                登录
-              </button>
-            </div>
-          </div>
-        </div>
+        <LoginRequired v-if="!token" title="未登录" description="请登录后查看账号信息与套餐详情" />
 
         <!-- Account Info (if logged in) -->
         <div v-else class="space-y-6">
@@ -293,13 +265,15 @@
 <script>
 import { defineComponent } from 'vue'
 import * as account from '../api/account'
-import { getToken, setToken, clearToken, setIdentity, getIdentity, clearIdentity } from '../utils/auth'
+import { getToken, clearToken, getIdentity, clearIdentity } from '../utils/auth'
+import LoginRequired from '../components/LoginRequired.vue'
 
 export default defineComponent({
+  components: { LoginRequired },
   data() {
     return {
       identity: getIdentity() || '',
-      password: '',
+      
       newPassword: '',
       confirmPassword: '',
       showPasswordForm: false,
@@ -363,23 +337,7 @@ export default defineComponent({
       this.confirmPassword = ''
       this.antiFill = true
     },
-    async doLogin() {
-      this.error = ''
-      try {
-        const res = await account.login(this.identity, this.password)
-        const data = res && (res.data || res)
-        if (data && data.token) {
-          setToken(data.token)
-          setIdentity(this.identity)
-          this.token = data.token
-          this.password = ''
-          await this.refresh()
-        } else {
-          throw new Error('未返回 token')
-        }
-      } catch (e) { this.error = e && e.message ? e.message : '登录失败'; try { const { toast } = require('../utils/toast'); toast(this.error, 'error') } catch (e) {} }
-      finally { try { if (this.token) { const { toast } = require('../utils/toast'); toast('登录成功', 'success') } } catch (e) {} }
-    },
+    
     async doLogout() {
       try { await account.logout(this.token); const { toast } = require('../utils/toast'); toast('已退出', 'success') } catch (e) {}
       clearToken(); clearIdentity(); this.token = ''; this.identity = ''

@@ -34,6 +34,12 @@ func (l *TranscriptLogic) GetOrCreateWithPlatform(ctx context.Context, idOrUrl s
 		targetLang = "zh"
 	}
 
+	// 预检：若当前 ASR 余额<=0，则直接拒绝（允许上一轮用完为0或被扣至0后，下一次不再允许）
+	ok, _ := l.hasEnoughASRBalance(ctx, identity)
+	if !ok {
+		return nil, errcode.ErrQuotaNotEnough
+	}
+
 	log.Printf("[Transcript] Step 1: 获取视频信息")
 	info, err := dlyt.Svc.InfoWithPlatform(ctx, idOrUrl, platform)
 	if err != nil {
@@ -264,4 +270,18 @@ func (l *TranscriptLogic) deductASRBalance(ctx context.Context, identity string,
 	}
 
 	return nil
+}
+
+// hasEnoughASRBalance 检查用户是否还有可用的 ASR 余额（>0）
+func (l *TranscriptLogic) hasEnoughASRBalance(ctx context.Context, identity string) (bool, error) {
+	if identity == "" {
+		return false, nil
+	}
+	var remain int
+	row := db.WithContext(ctx).Raw("SELECT COALESCE(SUM(remain_asr_chars),0) FROM user_package WHERE user_identity = ? AND (expire_at IS NULL OR expire_at > NOW())", identity).Row()
+	if err := row.Err(); err != nil {
+		return true, err
+	}
+	_ = row.Scan(&remain)
+	return remain > 0, nil
 }
