@@ -15,7 +15,7 @@
 
       <div class="max-w-3xl mx-auto mt-10 md:mt-12">
         <div 
-          class="flex w-full flex-col items-center rounded-[12px] border p-4 shadow-[0_0_16px_0_rgba(0,0,0,0.06)] transition-all duration-200"
+          class="relative flex w-full flex-col items-center rounded-[12px] border p-4 shadow-[0_0_16px_0_rgba(0,0,0,0.06)] transition-all duration-200"
           :class="isDragOver ? 'border-blue-400 border-2 bg-blue-50' : 'border-gray-200'"
           @dragover.prevent="onDragOver"
           @dragenter.prevent="onDragEnter" 
@@ -63,14 +63,21 @@
                     class="flex w-full bg-transparent text-base outline-none md:text-sm min-h-20 max-h-96 resize-none rounded-none border-none p-0 pr-12 pb-8 text-gray-800 placeholder:text-gray-400 shadow-none overflow-y-auto"
                     v-model="mainText"
                     placeholder="贴上链接或输入文字，即刻生成你的声音"
-                    @input="adjustTextareaHeight"
+                    @input="onTextInput"
                   />
-                  <div v-if="!showInlineCard" class="pointer-events-none absolute bottom-1 right-2 text-[11px] leading-none text-gray-400 bg-white/70 rounded px-1">
-                    {{ normalizeAndCount(mainText).count }}
+                  <div v-if="!showInlineCard" class="pointer-events-none absolute bottom-1 right-2 text-[11px] leading-none bg-white/70 rounded px-1" :class="textCountClass">
+                    {{ textCount }}/1000
                   </div>
                 </div>
                 <div v-if="!showInlineCard" class="text-xs text-gray-500">
                   支持 YouTube / 哔哩哔哩，亦可拖拽上传文本
+                </div>
+                <!-- 字数超限提示 -->
+                <div v-if="!showInlineCard && textCount > 1000" class="flex items-center gap-2 mt-2 p-2 bg-red-50 border border-red-200 rounded-md">
+                  <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                  </svg>
+                  <span class="text-sm text-red-700">文本超出1000字限制，当前{{ textCount }}字，请缩减文字长度后再进行语音合成</span>
                 </div>
               </div>
             </div>
@@ -118,7 +125,7 @@
                 <div class="flex items-center gap-2">
                   <button 
                     type="submit" 
-                    :disabled="loading || inlineLoading || actionLoading"
+                    :disabled="loading || inlineLoading || actionLoading || (!showInlineCard && textCount > 1000)"
                     class="inline-flex items-center gap-2 px-6 py-2 bg-black text-white rounded-md hover:opacity-90 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-black/20"
                   >
                     <svg 
@@ -152,6 +159,29 @@
             <input ref="fileInput" id="file-input" type="file" accept=".txt,.md,.docx" class="sr-only" @change="onFileChange" />
           </form>
 
+          <!-- TTS 加载遮罩 -->
+          <LoadingOverlay 
+            :show="loading" 
+            type="tts" 
+            :text-length="normalizeAndCount(mainText).count"
+            :show-progress="true"
+          />
+
+          <!-- 视频信息获取加载遮罩 -->
+          <LoadingOverlay 
+            :show="inlineLoading" 
+            type="video" 
+            :show-progress="true"
+          />
+
+          <!-- 字幕获取加载遮罩 -->
+          <LoadingOverlay 
+            :show="actionLoading" 
+            type="subtitle" 
+            :text-length="0"
+            :show-progress="true"
+          />
+
           <!-- 隐藏的音色解析器：用于页面刷新后自动同步默认音色的名称与性别到工具栏按钮 -->
           <VoiceSelector v-model="speaker" :inline="true" :emit-on-mount="true" style="display:none" @selected="onVoiceSelected" />
 
@@ -165,18 +195,19 @@
               </div>
             </div>
 
-            <!-- 合成状态与播放器 -->
-            <div class="w-full mt-4">
-              <div v-if="loading" class="text-sm text-gray-500">处理中...</div>
-              <div v-if="audioUrl" class="mt-2">
-                <AudioPlayer 
-                  :src="audioUrl" 
-                  :compact="true" 
-                  :show-actions="false" 
-                  :show-download="true"
-                  :label="mainText"
-                />
-              </div>
+            <!-- 合成结果播放器 -->
+            <div v-if="audioUrl" class="w-full mt-4">
+              <AudioPlayer 
+                :src="audioUrl" 
+                :compact="true" 
+                :show-actions="false" 
+                :show-download="true"
+                :label="mainText"
+                :speed-options="[0.5, 0.75, 1, 1.1, 1.25, 1.5, 2]"
+                :min-speed="0.5"
+                :max-speed="2"
+                :show-speed-control="true"
+              />
             </div>
           </div>
         </div>
@@ -193,10 +224,11 @@ import * as tts from '../api/tts'
 import VideoCard from '../components/VideoCard.vue'
 import VoiceSelector from '../components/VoiceSelector.vue'
 import AudioPlayer from '../components/AudioPlayer.vue'
+import LoadingOverlay from '../components/LoadingOverlay.vue'
 import { normalizeAndCount } from '../utils/text'
 
 export default defineComponent({
-  components: { VideoCard, VoiceSelector, AudioPlayer },
+  components: { VideoCard, VoiceSelector, AudioPlayer, LoadingOverlay },
   setup() {
     const mainText = ref('')
     const fileInput = ref(null)
@@ -305,6 +337,31 @@ export default defineComponent({
     const dragCounter = ref(0) // 用于处理嵌套元素的dragenter/dragleave
 
     function triggerUpload() { fileInput.value && fileInput.value.click() }
+
+    // 常量定义
+    const MAX_TEXT_LENGTH = 1000
+
+    // 计算字数
+    const textCount = computed(() => {
+      return normalizeAndCount(mainText.value).count
+    })
+
+    // 字数显示样式
+    const textCountClass = computed(() => {
+      const count = textCount.value
+      if (count >= MAX_TEXT_LENGTH) {
+        return 'text-red-600 font-medium'
+      } else if (count >= MAX_TEXT_LENGTH * 0.9) { // 90%时显示警告
+        return 'text-amber-600 font-medium'
+      }
+      return 'text-gray-400'
+    })
+
+    // 处理文本输入
+    function onTextInput(event) {
+      // 正常处理，不截断
+      adjustTextareaHeight()
+    }
 
     // 自动调整textarea高度
     function adjustTextareaHeight() {
@@ -578,7 +635,7 @@ export default defineComponent({
 
     async function onCreate() {
       const text = (mainText.value || '').trim()
-      // 若存在视频卡片，执行“继续创作”：获取字幕
+      // 若存在视频卡片，执行"继续创作"：获取字幕
       if (showInlineCard.value) {
         await fetchInlineSubtitles()
         return
@@ -587,14 +644,25 @@ export default defineComponent({
         try { const { toast } = require('../utils/toast'); toast('请输入文本或视频链接', 'error') } catch (e) {} 
         return 
       }
+      
+      // 检查字数限制
+      const { count } = normalizeAndCount(text)
+      if (count > MAX_TEXT_LENGTH) {
+        try { 
+          const { toast } = require('../utils/toast'); 
+          toast(`文本超出${MAX_TEXT_LENGTH}字限制，当前${count}字，请缩减后再试`, 'error') 
+        } catch (e) {}
+        return
+      }
+      
       // 检测视频链接类型
       const videoType = detectVideoType(text)
       if (videoType.type !== 'text') {
-        // 如果是视频链接，预览视频信息（按钮进入“继续创作”态）
+        // 如果是视频链接，预览视频信息（按钮进入"继续创作"态）
         await previewInlineVideo(videoType.url)
         return
       }
-      // 普通文本 或 “完成创作”阶段：进行TTS合成
+      // 普通文本 或 "完成创作"阶段：进行TTS合成
       loading.value = true; error.value = ''; audioUrl.value = ''
       try {
         const res = await tts.synthesize({ text, speaker: speaker.value, use_my_voice: useMyVoice.value })
@@ -684,6 +752,8 @@ export default defineComponent({
       showVoicePanel, toggleVoicePanel, voicePanelRef, voiceBtnRef, currentVoiceLabel, voiceBtnClass, voiceIconClass, onVoiceSelected,
       // 我的声音开关
       useMyVoice, toggleMyVoice,
+      // 字数限制相关
+      textCount, textCountClass, onTextInput,
     }
   },
 })

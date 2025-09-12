@@ -54,22 +54,69 @@
           </div>
 
           <!-- Pagination -->
-          <div v-if="items.length" class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-            <button 
-              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200" 
-              :disabled="page<=1" 
-              @click="changePage(page-1)"
-            >
-              上一页
-            </button>
-            <div class="text-sm text-gray-600">第 {{ page }} 页</div>
-            <button 
-              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200" 
-              :disabled="items.length<size" 
-              @click="changePage(page+1)"
-            >
-              下一页
-            </button>
+          <div v-if="items.length" class="px-6 py-4 bg-gray-50 border-t border-gray-100">
+            <!-- 数据统计信息 -->
+            <div class="flex items-center justify-center mb-4 text-sm text-gray-600">
+              <span v-if="pagination.total > 0">
+                共 {{ pagination.total }} 条记录，第 {{ page }} / {{ pagination.total_pages }} 页
+              </span>
+              <span v-else>第 {{ page }} 页</span>
+            </div>
+            
+            <!-- 分页按钮 -->
+            <div class="flex items-center justify-between">
+              <button 
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200" 
+                :disabled="!pagination.has_prev" 
+                @click="changePage(page-1)"
+              >
+                上一页
+              </button>
+              
+              <!-- 页码显示 -->
+              <div class="flex items-center gap-2">
+                <template v-if="pagination.total_pages > 0">
+                  <!-- 第一页 -->
+                  <button 
+                    v-if="page > 3"
+                    class="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200"
+                    @click="changePage(1)"
+                  >
+                    1
+                  </button>
+                  <span v-if="page > 4" class="text-gray-400">...</span>
+                  
+                  <!-- 当前页附近的页码 -->
+                  <template v-for="p in getVisiblePages()" :key="p">
+                    <button 
+                      class="px-3 py-2 text-sm border rounded-md transition-colors duration-200"
+                      :class="p === page ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300 hover:bg-gray-50'"
+                      @click="changePage(p)"
+                    >
+                      {{ p }}
+                    </button>
+                  </template>
+                  
+                  <!-- 最后一页 -->
+                  <span v-if="page < pagination.total_pages - 3" class="text-gray-400">...</span>
+                  <button 
+                    v-if="page < pagination.total_pages - 2"
+                    class="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200"
+                    @click="changePage(pagination.total_pages)"
+                  >
+                    {{ pagination.total_pages }}
+                  </button>
+                </template>
+              </div>
+              
+              <button 
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200" 
+                :disabled="!pagination.has_next" 
+                @click="changePage(page+1)"
+              >
+                下一页
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -144,7 +191,21 @@ import Spinner from '../components/Spinner.vue'
 export default defineComponent({
   components: { VideoCard, Spinner },
   data() {
-    return { loading: false, error: '', items: [], page: 1, size: 20, detail: null, showDetail: false }
+    return { 
+      loading: false, 
+      error: '', 
+      items: [], 
+      page: 1, 
+      size: 20, 
+      detail: null, 
+      showDetail: false,
+      pagination: {
+        total: 0,
+        total_pages: 0,
+        has_next: false,
+        has_prev: false
+      }
+    }
   },
   created() { this.fetch() },
   methods: {
@@ -152,12 +213,53 @@ export default defineComponent({
       this.loading = true; this.error = ''
       try {
         const res = await historyApi.listVideos({ page: this.page, size: this.size })
-        const data = (res && res.data) || {}
-        this.items = (Array.isArray(data.items) ? data.items : (Array.isArray(res && res.items) ? res.items : []))
-      } catch (e) { this.error = e && e.message ? e.message : '加载失败' }
+        const data = (res && res.data) || res || {}
+        
+        // 处理数据列表
+        this.items = (Array.isArray(data.items) ? data.items : [])
+        
+        // 处理分页信息
+        if (data.pagination) {
+          this.pagination = {
+            total: data.pagination.total || 0,
+            total_pages: data.pagination.total_pages || 0,
+            has_next: data.pagination.has_next || false,
+            has_prev: data.pagination.has_prev || false
+          }
+        } else {
+          // 兼容旧版本API，使用传统方式判断
+          this.pagination = {
+            total: 0,
+            total_pages: 0,
+            has_next: this.items.length >= this.size,
+            has_prev: this.page > 1
+          }
+        }
+      } catch (e) { 
+        this.error = e && e.message ? e.message : '加载失败'
+      }
       finally { this.loading = false }
     },
-    changePage(p) { this.page = p; this.fetch() },
+    changePage(p) { 
+      if (p < 1 || (this.pagination.total_pages > 0 && p > this.pagination.total_pages)) return
+      this.page = p
+      this.fetch()
+    },
+    getVisiblePages() {
+      const current = this.page
+      const total = this.pagination.total_pages
+      if (total <= 0) return [current]
+      
+      const range = 2 // 当前页左右各显示2页
+      const start = Math.max(1, current - range)
+      const end = Math.min(total, current + range)
+      
+      const pages = []
+      for (let i = start; i <= end; i++) {
+        pages.push(i)
+      }
+      return pages
+    },
     async goDetail(v) {
       const site = v.source_site || 'youtube'
       const id = v.video_id || v.id

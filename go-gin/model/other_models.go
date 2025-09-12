@@ -52,12 +52,13 @@ type UserPackage struct {
 func (UserPackage) TableName() string { return "user_package" }
 
 type UsageDaily struct {
-	Id           int64  `gorm:"column:id;primaryKey" json:"id"`
-	UserIdentity string `gorm:"column:user_identity" json:"user_identity"`
-	Date         string `gorm:"column:date" json:"date"`
-	ASRChars     int    `gorm:"column:asr_chars" json:"asr_chars"`
-	TTSChars     int    `gorm:"column:tts_chars" json:"tts_chars"`
-	Requests     int    `gorm:"column:requests" json:"requests"`
+	Id           int64     `gorm:"column:id;primaryKey" json:"id"`
+	UserIdentity string    `gorm:"column:user_identity" json:"user_identity"`
+	Date         string    `gorm:"column:date" json:"date"`
+	ASRChars     int       `gorm:"column:asr_chars" json:"asr_chars"`
+	TTSChars     int       `gorm:"column:tts_chars" json:"tts_chars"`
+	Requests     int       `gorm:"column:requests" json:"requests"`
+	CreatedAt    time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (UsageDaily) TableName() string { return "usage_daily" }

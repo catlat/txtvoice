@@ -1,12 +1,14 @@
 package controller
 
 import (
+	"fmt"
 	"go-gin/internal/component/logx"
 	"go-gin/internal/httpx"
 	"go-gin/internal/httpx/validators"
 	"go-gin/logic"
 	"go-gin/typing"
 	"strings"
+	"unicode/utf8"
 )
 
 type ttsController struct{}
@@ -21,6 +23,12 @@ func (c *ttsController) Synthesize(ctx *httpx.Context) (any, error) {
 	if err := validators.Validate(&req); err != nil {
 		return nil, err
 	}
+
+	// 自定义验证：检查字符数不超过1000
+	if utf8.RuneCountInString(req.Text) > 1000 {
+		return nil, fmt.Errorf("文本字数不能超过1000字，当前%d字", utf8.RuneCountInString(req.Text))
+	}
+
 	identity := httpx.Identity(ctx)
 	l := logic.NewTTSLogic()
 	item, err := l.Synthesize(ctx, identity, req.Text, req.Speaker, req.UseMyVoice)

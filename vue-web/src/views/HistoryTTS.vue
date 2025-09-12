@@ -30,35 +30,77 @@
 
           <!-- Content -->
           <div v-else-if="items.length" class="divide-y divide-gray-100">
-            <div v-for="(it, idx) in items" :key="idx" class="p-6 hover:bg-gray-50 transition-colors duration-200">
-              <div class="flex items-start justify-between gap-4">
-                <div class="flex-1 min-w-0">
-                  <!-- Date -->
-                  <div class="flex items-center gap-2 mb-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 text-gray-400">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                    </svg>
-                    <span class="text-sm text-gray-500">{{ formatDate(it.created_at) }}</span>
-                  </div>
-                  
-                  <!-- Text Preview -->
-                  <div class="text-gray-900 leading-relaxed">
-                    <p class="line-clamp-3">{{ it.text_preview || '无文本内容' }}</p>
-                  </div>
-                  
-                  <!-- Character Count & Speaker -->
-                  <div class="mt-2 text-xs text-gray-500 flex items-center gap-3">
-                    <span>{{ it.char_count || 0 }} 字符</span>
-                    <span v-if="it.speaker">语音：{{ it.speaker }}</span>
+            <div v-for="(it, idx) in items" :key="idx" class="p-4 hover:bg-gray-50 transition-colors duration-200">
+              <!-- Header Information - 紧凑单行布局 -->
+              <div class="mb-3">
+                <!-- 第一行：时间、字符数、音色 -->
+                <div class="flex items-center justify-between text-sm text-gray-500 mb-2">
+                  <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                      </svg>
+                      <span>{{ formatDate(it.created_at) }}</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.627 2.707-3.227V6.741c0-1.6-1.123-2.994-2.707-3.227A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.514C3.373 3.747 2.25 5.14 2.25 6.741v6.018Z" />
+                      </svg>
+                      <span>{{ it.char_count || 0 }} 字符</span>
+                    </div>
+                    <div v-if="it.speaker" class="flex items-center gap-1 text-blue-600">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.59-.79-1.59-1.75v-4.5c0-.96.71-1.75 1.59-1.75h2.24Z" />
+                      </svg>
+                      <span class="font-medium">{{ getVoiceName(it.speaker) }}</span>
+                    </div>
                   </div>
                 </div>
+                
+                <!-- 文本预览 - 可展开折叠 -->
+                <div class="text-gray-900 leading-relaxed">
+                  <div 
+                    class="cursor-pointer select-none"
+                    @click="toggleTextExpand(idx)"
+                  >
+                    <p 
+                      :class="[
+                        'text-sm transition-all duration-200',
+                        expandedTexts[idx] ? '' : 'line-clamp-2'
+                      ]"
+                    >
+                      {{ it.text_preview || '无文本内容' }}
+                    </p>
+                    <div 
+                      v-if="isTextLong(it.text_preview)" 
+                      class="flex items-center gap-1 mt-1 text-xs text-blue-600 hover:text-blue-700"
+                    >
+                      <span>{{ expandedTexts[idx] ? '收起' : '展开' }}</span>
+                      <svg 
+                        xmlns="http://www.w3.org/2000/svg" 
+                        fill="none" 
+                        viewBox="0 0 24 24" 
+                        stroke-width="1.5" 
+                        stroke="currentColor" 
+                        :class="[
+                          'w-3 h-3 transition-transform duration-200',
+                          expandedTexts[idx] ? 'rotate-180' : ''
+                        ]"
+                      >
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-                <!-- Audio Player -->
-                <div v-if="it.audio_url" class="flex-shrink-0">
-                  <div class="bg-gray-50 rounded-lg p-3 min-w-0">
-                    <AudioPlayer :src="it.audio_url" />
-                  </div>
-                </div>
+              <!-- Audio Player Row -->
+              <div v-if="it.audio_url" class="pt-2 border-t border-gray-100">
+                <AudioPlayer 
+                  :src="it.audio_url" 
+                  :show-download="true"
+                  :label="it.text_preview"
+                />
               </div>
             </div>
           </div>
@@ -73,22 +115,69 @@
           </div>
 
           <!-- Pagination -->
-          <div v-if="items.length" class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-            <button 
-              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200" 
-              :disabled="page<=1" 
-              @click="changePage(page-1)"
-            >
-              上一页
-            </button>
-            <div class="text-sm text-gray-600">第 {{ page }} 页</div>
-            <button 
-              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200" 
-              :disabled="items.length<size" 
-              @click="changePage(page+1)"
-            >
-              下一页
-            </button>
+          <div v-if="items.length" class="px-6 py-4 bg-gray-50 border-t border-gray-100">
+            <!-- 数据统计信息 -->
+            <div class="flex items-center justify-center mb-4 text-sm text-gray-600">
+              <span v-if="pagination.total > 0">
+                共 {{ pagination.total }} 条记录，第 {{ page }} / {{ pagination.total_pages }} 页
+              </span>
+              <span v-else>第 {{ page }} 页</span>
+            </div>
+            
+            <!-- 分页按钮 -->
+            <div class="flex items-center justify-between">
+              <button 
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200" 
+                :disabled="!pagination.has_prev" 
+                @click="changePage(page-1)"
+              >
+                上一页
+              </button>
+              
+              <!-- 页码显示 -->
+              <div class="flex items-center gap-2">
+                <template v-if="pagination.total_pages > 0">
+                  <!-- 第一页 -->
+                  <button 
+                    v-if="page > 3"
+                    class="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200"
+                    @click="changePage(1)"
+                  >
+                    1
+                  </button>
+                  <span v-if="page > 4" class="text-gray-400">...</span>
+                  
+                  <!-- 当前页附近的页码 -->
+                  <template v-for="p in getVisiblePages()" :key="p">
+                    <button 
+                      class="px-3 py-2 text-sm border rounded-md transition-colors duration-200"
+                      :class="p === page ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300 hover:bg-gray-50'"
+                      @click="changePage(p)"
+                    >
+                      {{ p }}
+                    </button>
+                  </template>
+                  
+                  <!-- 最后一页 -->
+                  <span v-if="page < pagination.total_pages - 3" class="text-gray-400">...</span>
+                  <button 
+                    v-if="page < pagination.total_pages - 2"
+                    class="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200"
+                    @click="changePage(pagination.total_pages)"
+                  >
+                    {{ pagination.total_pages }}
+                  </button>
+                </template>
+              </div>
+              
+              <button 
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200" 
+                :disabled="!pagination.has_next" 
+                @click="changePage(page+1)"
+              >
+                下一页
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -105,20 +194,127 @@ import Spinner from '../components/Spinner.vue'
 export default defineComponent({
   components: { AudioPlayer, Spinner },
   data() {
-    return { loading: false, error: '', items: [], page: 1, size: 20 }
+    return { 
+      loading: false, 
+      error: '', 
+      items: [], 
+      page: 1, 
+      size: 20,
+      pagination: {
+        total: 0,
+        total_pages: 0,
+        has_next: false,
+        has_prev: false
+      },
+      expandedTexts: {}, // 跟踪展开的文本
+      voiceMap: {} // 音色映射表
+    }
   },
-  created() { this.fetch() },
+  created() { 
+    this.loadVoices()
+    this.fetch() 
+  },
   methods: {
     async fetch() {
       this.loading = true; this.error = ''
       try {
         const res = await historyApi.listTTS({ page: this.page, size: this.size })
-        const data = (res && res.data) || {}
-        this.items = (Array.isArray(data.items) ? data.items : (Array.isArray(res && res.items) ? res.items : []))
-      } catch (e) { this.error = e && e.message ? e.message : '加载失败'; try { const { toast } = require('../utils/toast'); toast(this.error, 'error') } catch (e) {} }
+        const data = (res && res.data) || res || {}
+        
+        // 处理数据列表
+        this.items = (Array.isArray(data.items) ? data.items : [])
+        
+        // 处理分页信息
+        if (data.pagination) {
+          this.pagination = {
+            total: data.pagination.total || 0,
+            total_pages: data.pagination.total_pages || 0,
+            has_next: data.pagination.has_next || false,
+            has_prev: data.pagination.has_prev || false
+          }
+        } else {
+          // 兼容旧版本API，使用传统方式判断
+          this.pagination = {
+            total: 0,
+            total_pages: 0,
+            has_next: this.items.length >= this.size,
+            has_prev: this.page > 1
+          }
+        }
+      } catch (e) { 
+        this.error = e && e.message ? e.message : '加载失败'
+        try { 
+          const { toast } = require('../utils/toast')
+          toast(this.error, 'error')
+        } catch (e) {}
+      }
       finally { this.loading = false }
     },
-    changePage(p) { this.page = p; this.fetch() },
+    changePage(p) { 
+      if (p < 1 || (this.pagination.total_pages > 0 && p > this.pagination.total_pages)) return
+      this.page = p
+      // 重置展开状态
+      this.expandedTexts = {}
+      this.fetch()
+    },
+    getVisiblePages() {
+      const current = this.page
+      const total = this.pagination.total_pages
+      if (total <= 0) return [current]
+      
+      const range = 2 // 当前页左右各显示2页
+      const start = Math.max(1, current - range)
+      const end = Math.min(total, current + range)
+      
+      const pages = []
+      for (let i = start; i <= end; i++) {
+        pages.push(i)
+      }
+      return pages
+    },
+    async loadVoices() {
+      try {
+        const response = await fetch('/voices.json')
+        const voicesData = await response.json()
+        
+        // 构建音色映射表
+        const voiceMap = {}
+        Object.keys(voicesData).forEach(providerKey => {
+          const provider = voicesData[providerKey]
+          if (provider.voice_options && Array.isArray(provider.voice_options)) {
+            provider.voice_options.forEach(voice => {
+              if (voice.voice_config && Array.isArray(voice.voice_config)) {
+                voice.voice_config.forEach(config => {
+                  if (config.params && config.params.voice_type) {
+                    voiceMap[config.params.voice_type] = voice.name
+                  }
+                })
+              }
+            })
+          }
+        })
+        
+        this.voiceMap = voiceMap
+      } catch (e) {
+        console.warn('加载音色数据失败:', e)
+      }
+    },
+    getVoiceName(speaker) {
+      if (!speaker) return '未知音色'
+      return this.voiceMap[speaker] || speaker
+    },
+    toggleTextExpand(index) {
+      // Vue 3 响应式更新
+      this.expandedTexts = {
+        ...this.expandedTexts,
+        [index]: !this.expandedTexts[index]
+      }
+    },
+    isTextLong(text) {
+      if (!text) return false
+      // 判断文本是否超过两行（大约80个字符）
+      return text.length > 80
+    },
     formatDate(dateStr) {
       if (!dateStr) return '未知时间'
       try {

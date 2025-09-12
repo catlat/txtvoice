@@ -1,6 +1,6 @@
 <template>
   <div class="w-full">
-    <div class="flex items-center w-full gap-3">
+    <div class="flex items-center w-full gap-2">
       <media-player
         class="w-full rounded-xl border border-gray-200 bg-white shadow-sm"
         v-bind:src.prop="vidSrc"
@@ -8,15 +8,29 @@
         view-type="audio"
         lang="zh-CN"
         crossorigin
+        v-bind:playback-rates.prop="speedOptions"
+        v-bind:speed.prop="{ min: minSpeed, max: maxSpeed }"
       >
         <media-provider></media-provider>
         <media-audio-layout
           class="text-gray-800 [--media-accent:#2563eb] [--media-controls-color:#1f2937] [--media-button-hover-bg:rgb(0_0_0_/_0.06)] [--media-slider-track-bg:rgb(0_0_0_/_0.12)] [--media-slider-track-progress-bg:rgb(0_0_0_/_0.3)] [--media-slider-thumb-border:1px_solid_#d1d5db] [--media-slider-thumb-bg:#ffffff] [--media-slider-track-height:6px] [--media-slider-thumb-size:14px]"
           v-bind:translations.prop="zhCNTranslations"
           v-bind:colorScheme.prop="'light'"
+          v-bind:hide-speed.prop="!showSpeedControl"
         ></media-audio-layout>
       </media-player>
-      <button v-if="showDownload" type="button" class="px-3 py-1 text-xs bg-black text-white rounded-md hover:opacity-90 shrink-0 dark:bg-white dark:text-black" @click="download">下载</button>
+      <button 
+        v-if="showDownload" 
+        type="button" 
+        class="flex items-center justify-center w-15 h-15 bg-white border border-gray-200 text-gray-700 hover:text-gray-900 hover:border-gray-300 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 shrink-0"
+        @click="download"
+        title="下载音频"
+        aria-label="下载音频"
+      >
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      </button>
     </div>
   </div>
 </template>
@@ -35,6 +49,14 @@ export default defineComponent({
     compact: { type: Boolean, default: false },
     showActions: { type: Boolean, default: true },
     showDownload: { type: Boolean, default: false },
+    // 播放速度控制选项
+    speedOptions: { 
+      type: Array, 
+      default: () => [0.5, 0.75, 1, 1.1, 1.25, 1.5, 1.75, 2] 
+    },
+    minSpeed: { type: Number, default: 0.25 },
+    maxSpeed: { type: Number, default: 3.0 },
+    showSpeedControl: { type: Boolean, default: true },
   },
   computed: {
     vidSrc() {
@@ -82,6 +104,18 @@ export default defineComponent({
         Playback: '播放',
         Speed: '速度',
         Normal: '正常',
+        'Playback Rate': '播放速度',
+        '0.25x': '0.25倍速',
+        '0.5x': '0.5倍速',
+        '0.75x': '0.75倍速',
+        '1x': '1倍速',
+        '1.1x': '1.1倍速',
+        '1.25x': '1.25倍速',
+        '1.5x': '1.5倍速',
+        '1.75x': '1.75倍速',
+        '2x': '2倍速',
+        '2.5x': '2.5倍速',
+        '3x': '3倍速',
         Quality: '画质',
         Auto: '自动',
         Settings: '设置',

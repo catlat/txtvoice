@@ -46,6 +46,23 @@ func (l *TTSLogic) Synthesize(ctx context.Context, identity, text, speaker strin
 	if item.Id != 0 {
 		fmt.Printf("TTS cache hit: id=%d\n", item.Id)
 		logx.WithContext(ctx).Info("tts_history_hit", map[string]any{"id": item.Id, "identity": identity, "speaker": effectiveSpeaker})
+
+		// 缓存命中时也需要记录使用统计
+		if err := metrics.AddUsage(ctx, identity, 0, item.CharCount, 1); err != nil {
+			fmt.Printf("TTS cache hit AddUsage failed: identity=%s, chars=%d, error=%v\n", identity, item.CharCount, err)
+			logx.WithContext(ctx).Error("tts_cache_usage_record_failed", map[string]any{"identity": identity, "chars": item.CharCount, "error": err.Error()})
+		} else {
+			fmt.Printf("TTS cache hit AddUsage success: identity=%s, chars=%d\n", identity, item.CharCount)
+		}
+
+		// 缓存命中时也需要扣减套餐余额
+		if err := l.deductTTSBalance(ctx, identity, item.CharCount); err != nil {
+			fmt.Printf("TTS cache hit balance deduction failed: identity=%s, chars=%d, error=%v\n", identity, item.CharCount, err)
+			logx.WithContext(ctx).Error("tts_cache_balance_deduction_failed", map[string]any{"identity": identity, "chars": item.CharCount, "error": err.Error()})
+		} else {
+			fmt.Printf("TTS cache hit balance deducted: identity=%s, chars=%d\n", identity, item.CharCount)
+		}
+
 		return &item, nil
 	}
 
@@ -90,6 +107,50 @@ func (l *TTSLogic) Synthesize(ctx context.Context, identity, text, speaker strin
 	fmt.Printf("TTS success: saved id=%d\n", item.Id)
 	logx.WithContext(ctx).Info("tts_history_created", map[string]any{"id": item.Id, "identity": identity, "speaker": effectiveSpeaker})
 
-	_ = metrics.AddUsage(ctx, identity, 0, item.CharCount, 1)
+	// 记录使用统计 - 确保即使统计失败也不影响主流程
+	if err := metrics.AddUsage(ctx, identity, 0, item.CharCount, 1); err != nil {
+		fmt.Printf("TTS AddUsage failed: identity=%s, chars=%d, error=%v\n", identity, item.CharCount, err)
+		logx.WithContext(ctx).Error("tts_usage_record_failed", map[string]any{"identity": identity, "chars": item.CharCount, "error": err.Error()})
+	} else {
+		fmt.Printf("TTS AddUsage success: identity=%s, chars=%d\n", identity, item.CharCount)
+	}
+
+	// 扣减套餐余额 - 即使扣减失败也不影响主流程
+	if err := l.deductTTSBalance(ctx, identity, item.CharCount); err != nil {
+		fmt.Printf("TTS balance deduction failed: identity=%s, chars=%d, error=%v\n", identity, item.CharCount, err)
+		logx.WithContext(ctx).Error("tts_balance_deduction_failed", map[string]any{"identity": identity, "chars": item.CharCount, "error": err.Error()})
+	} else {
+		fmt.Printf("TTS balance deducted: identity=%s, chars=%d\n", identity, item.CharCount)
+	}
+
 	return &item, nil
+}
+
+// deductTTSBalance 扣减用户TTS套餐余额
+func (l *TTSLogic) deductTTSBalance(ctx context.Context, identity string, chars int) error {
+	if identity == "" || chars <= 0 {
+		return nil
+	}
+
+	// 更新用户套餐余额，按优先级扣减（先到期的先扣）
+	sql := `UPDATE user_package 
+			SET remain_tts_chars = GREATEST(0, remain_tts_chars - ?),
+				updated_at = NOW()
+			WHERE user_identity = ? 
+			AND remain_tts_chars > 0 
+			AND (expire_at IS NULL OR expire_at > NOW())
+			ORDER BY expire_at ASC 
+			LIMIT 1`
+
+	result := db.WithContext(ctx).Exec(sql, chars, identity)
+	if result.Error() != nil {
+		return result.Error()
+	}
+
+	// 如果没有更新任何记录，说明用户没有可用余额，但不报错（允许透支使用）
+	if result.RowsAffected == 0 {
+		fmt.Printf("TTS balance deduction: no available balance for identity=%s, chars=%d\n", identity, chars)
+	}
+
+	return nil
 }

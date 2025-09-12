@@ -2,8 +2,8 @@ import { getToken, getIdentity } from '../utils/auth'
 import { toast } from '../utils/toast'
 
 // const BASE = 'http://43.133.180.227:9005/api'
-const BASE = 'http://180.163.81.250:6020/api'
-// const BASE = 'http://127.0.0.1:9005/api'
+// const BASE = 'http://180.163.81.250:6020/api'
+const BASE = 'http://127.0.0.1:9005/api'
 //  const BASE = '/api'
 function resolveUrl(path) {
   if (path.startsWith('http')) return path

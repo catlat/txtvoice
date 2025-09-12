@@ -150,6 +150,15 @@ func (l *TranscriptLogic) GetOrCreateWithPlatform(ctx context.Context, idOrUrl s
 		_ = metrics.AddUsage(ctx, identity, 0, translateCharCount, 0)
 	}
 
+	log.Printf("[Transcript] Step 8: 扣减套餐余额")
+	// 按最终返回给前端的中文字符数扣费（finalText）
+	finalCharCount := len([]rune(finalText))
+	if err := l.deductASRBalance(ctx, identity, finalCharCount); err != nil {
+		log.Printf("[Transcript] ASR balance deduction failed: identity=%s, chars=%d, error=%v", identity, finalCharCount, err)
+	} else {
+		log.Printf("[Transcript] ASR balance deducted: identity=%s, chars=%d (final text)", identity, finalCharCount)
+	}
+
 	log.Printf("[Transcript] 转录处理完成 - TranscriptId: %d, ASR字符数: %d, 翻译字符数: %d",
 		transcript.Id, asrResp.CharCount, translateCharCount)
 
@@ -226,4 +235,33 @@ func isQiniuUrl(u string) bool {
 func HashTextSpeaker(text, speaker string) string {
 	h := sha256.Sum256([]byte(text + "|" + speaker))
 	return hex.EncodeToString(h[:])
+}
+
+// deductASRBalance 扣减用户ASR套餐余额
+func (l *TranscriptLogic) deductASRBalance(ctx context.Context, identity string, chars int) error {
+	if identity == "" || chars <= 0 {
+		return nil
+	}
+
+	// 更新用户套餐余额，按优先级扣减（先到期的先扣）
+	sql := `UPDATE user_package 
+			SET remain_asr_chars = GREATEST(0, remain_asr_chars - ?),
+				updated_at = NOW()
+			WHERE user_identity = ? 
+			AND remain_asr_chars > 0 
+			AND (expire_at IS NULL OR expire_at > NOW())
+			ORDER BY expire_at ASC 
+			LIMIT 1`
+
+	result := db.WithContext(ctx).Exec(sql, chars, identity)
+	if result.Error() != nil {
+		return result.Error()
+	}
+
+	// 如果没有更新任何记录，说明用户没有可用余额，但不报错（允许透支使用）
+	if result.RowsAffected == 0 {
+		log.Printf("[Transcript] ASR balance deduction: no available balance for identity=%s, chars=%d", identity, chars)
+	}
+
+	return nil
 }

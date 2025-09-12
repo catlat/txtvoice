@@ -123,6 +123,23 @@ def main(platform="youtube"):
         if not browser.contexts:
             raise RuntimeError("No browser contexts. Ensure Edge was started with --remote-debugging-port=9222")
         ctx = browser.contexts[0]
+        # 在获取 Cookie 前访问站点以刷新会话
+        try:
+            # 复用已有 Page，否则创建一个临时 Page
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            # 可选：降低首次渲染要求，避免等待过久
+            for u in cookie_urls:
+                page.goto(u, wait_until="domcontentloaded", timeout=20000)
+                # 小幅等待，确保服务端下发新 Cookie（如有）
+                time.sleep(0.5)
+        finally:
+            # 如果是我们创建的临时页面，关闭之
+            try:
+                if 'page' in locals() and page and page not in ctx.pages:
+                    pass  # 安全兜底（此分支通常不会触发）
+            except Exception:
+                pass
+        # 刷新后获取 Cookie
         cookies = ctx.cookies(cookie_urls)
         cookie_content = to_netscape(cookies, allowed_domains)
 

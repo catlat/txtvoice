@@ -10,10 +10,21 @@ type HistoryLogic struct{}
 
 func NewHistoryLogic() *HistoryLogic { return &HistoryLogic{} }
 
-func (l *HistoryLogic) ListVideos(ctx context.Context, page, size int) ([]model.YoutubeVideo, error) {
+func (l *HistoryLogic) ListVideos(ctx context.Context, page, size int) ([]model.YoutubeVideo, int64, error) {
 	var items []model.YoutubeVideo
-	_ = db.WithContext(ctx).Order("id desc").Limit(size).Offset((page - 1) * size).Find(&items)
-	return items, nil
+	var total int64
+
+	// 构建基础查询条件
+	baseQuery := db.WithContext(ctx).Model(&model.YoutubeVideo{})
+
+	// 获取总数
+	_ = baseQuery.Count(&total)
+
+	// 获取分页数据
+	q := baseQuery.Order("id desc").Limit(size).Offset((page - 1) * size)
+	_ = q.Find(&items)
+
+	return items, total, nil
 }
 
 func (l *HistoryLogic) GetVideoDetail(ctx context.Context, sourceSite, videoId string) (map[string]any, error) {
@@ -47,12 +58,22 @@ func (l *HistoryLogic) GetVideoDetail(ctx context.Context, sourceSite, videoId s
 	return detail, nil
 }
 
-func (l *HistoryLogic) ListTTS(ctx context.Context, page, size int, identity string) ([]model.TTSHistory, error) {
+func (l *HistoryLogic) ListTTS(ctx context.Context, page, size int, identity string) ([]model.TTSHistory, int64, error) {
 	var items []model.TTSHistory
-	q := db.WithContext(ctx).Order("id desc").Limit(size).Offset((page - 1) * size)
+	var total int64
+
+	// 构建基础查询条件
+	baseQuery := db.WithContext(ctx).Model(&model.TTSHistory{})
 	if identity != "" {
-		q = q.Where("user_identity=?", identity)
+		baseQuery = baseQuery.Where("user_identity=?", identity)
 	}
+
+	// 获取总数
+	_ = baseQuery.Count(&total)
+
+	// 获取分页数据
+	q := baseQuery.Order("id desc").Limit(size).Offset((page - 1) * size)
 	_ = q.Find(&items)
-	return items, nil
+
+	return items, total, nil
 }
