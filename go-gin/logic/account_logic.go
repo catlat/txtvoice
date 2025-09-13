@@ -38,11 +38,19 @@ func clampInt(value int, min int, max int) int {
 func (l *AccountLogic) Profile(ctx context.Context, identity string) (map[string]any, error) {
 	var au model.AccountUser
 	_ = db.WithContext(ctx).Where("identity=?", identity).First(&au)
+	// 附带返回用户专属声音ID（若无则为空字符串）
+	voiceId := ""
+	if identity != "" {
+		if uv, err := model.NewUserVoiceModel().GetByMobile(ctx, identity); err == nil && uv != nil {
+			voiceId = uv.VoiceId
+		}
+	}
 	return map[string]any{
 		"exists":       au.Id != 0,
 		"identity":     identity,
 		"status":       au.Status,
 		"display_name": au.DisplayName,
+		"voice_id":     voiceId,
 	}, nil
 }
 

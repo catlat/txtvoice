@@ -68,14 +68,29 @@
                         class="cursor-pointer select-none"
                         @click="toggleTextExpand(idx)"
                       >
-                        <p 
-                          :class="[
-                            'text-sm md:text-base transition-all duration-200',
-                            expandedTexts[idx] ? '' : 'line-clamp-2'
-                          ]"
-                        >
-                          {{ it.text_preview || '无文本内容' }}
-                        </p>
+                        <div class="flex items-center gap-2">
+                          <p 
+                            :class="[
+                              'text-sm md:text-base transition-all duration-200 flex-1',
+                              expandedTexts[idx] ? '' : 'line-clamp-2'
+                            ]"
+                          >
+                            {{ it.text_preview || '无文本内容' }}
+                          </p>
+                          <!-- 更小的播放图标按钮（仅在未加载音频时显示），与文字同行显示 -->
+                          <button
+                            v-if="it.audio_url && !loadedSrcs[idx]"
+                            type="button"
+                            class="inline-flex items-center justify-center w-6 h-6 rounded-full border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-300 transition"
+                            title="播放"
+                            aria-label="播放"
+                            @click.stop="playItem(idx, it)"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-3 h-3">
+                              <path d="M5.25 5.653c0-1.427 1.543-2.33 2.78-1.593l10.06 5.847c1.295.752 1.295 2.634 0 3.386L8.03 19.14c-1.237.737-2.78-.166-2.78-1.593V5.653Z" />
+                            </svg>
+                          </button>
+                        </div>
                         <div 
                           v-if="isTextLong(it.text_preview)" 
                           class="flex items-center gap-1 mt-1 text-xs text-gray-500 hover:text-gray-700"
@@ -101,12 +116,15 @@
 
                   <!-- Audio Player Row -->
                   <div v-if="it.audio_url" class="pt-3 md:pt-4 border-t border-gray-100">
-                    <AudioPlayer 
-                      :src="it.audio_url" 
-                      :show-download="true"
-                      :show-speed-control="true"
-                      :label="it.text_preview"
-                    />
+                    <template v-if="loadedSrcs[idx]">
+                      <AudioPlayer 
+                        :src="loadedSrcs[idx]" 
+                        :show-download="true"
+                        :show-speed-control="true"
+                        :label="it.text_preview"
+                      />
+                    </template>
+                    <template v-else></template>
                   </div>
                 </div>
               </div>
@@ -149,6 +167,7 @@
 <script>
 import { defineComponent } from 'vue'
 import { getToken } from '../utils/auth'
+import * as account from '../api/account'
 import * as historyApi from '../api/history'
 import AudioPlayer from '../components/AudioPlayer.vue'
 import Spinner from '../components/Spinner.vue'
@@ -172,14 +191,28 @@ export default defineComponent({
         has_prev: false
       },
       expandedTexts: {}, // 跟踪展开的文本
-      voiceMap: {} // 音色映射表
+      voiceMap: {}, // 音色映射表（value -> label）
+      myVoiceId: '', // 登录用户的专属声音ID
+      loadedSrcs: {} // 已加载音频的 src（按索引缓存）
     }
   },
   created() { 
     this.loadVoices()
     if (this.token) this.fetch() 
+    if (this.token) this.loadMyVoiceId()
   },
   methods: {
+    async loadMyVoiceId() {
+      try {
+        const res = await account.profile()
+        const data = (res && res.data) || res || {}
+        // 兼容不同字段命名
+        this.myVoiceId = data.voice_id || data.voiceId || ''
+      } catch (e) {
+        // 静默失败，不影响页面
+        this.myVoiceId = ''
+      }
+    },
     async fetch() {
       this.loading = true; this.error = ''
       try {
@@ -220,6 +253,8 @@ export default defineComponent({
       this.page = p
       // 重置展开状态
       this.expandedTexts = {}
+      // 重置已加载的音频来源，避免跨页占用资源
+      this.loadedSrcs = {}
       this.fetch()
     },
     getVisiblePages() {
@@ -239,26 +274,19 @@ export default defineComponent({
     },
     async loadVoices() {
       try {
-        const response = await fetch('/voices.json')
+        const response = await fetch('/voices.normalized.json')
         const voicesData = await response.json()
         
-        // 构建音色映射表
+        // 构建音色映射表（按当前明确的扁平数组结构）
         const voiceMap = {}
-        Object.keys(voicesData).forEach(providerKey => {
-          const provider = voicesData[providerKey]
-          if (provider.voice_options && Array.isArray(provider.voice_options)) {
-            provider.voice_options.forEach(voice => {
-              if (voice.voice_config && Array.isArray(voice.voice_config)) {
-                voice.voice_config.forEach(config => {
-                  if (config.params && config.params.voice_type) {
-                    voiceMap[config.params.voice_type] = voice.name
-                  }
-                })
-              }
-            })
-          }
-        })
-        
+        if (Array.isArray(voicesData)) {
+          voicesData.forEach(item => {
+            if (!item) return
+            const value = item.value || ''
+            const label = item.label || ''
+            if (value && label) voiceMap[value] = label
+          })
+        }
         this.voiceMap = voiceMap
       } catch (e) {
         console.warn('加载音色数据失败:', e)
@@ -266,7 +294,13 @@ export default defineComponent({
     },
     getVoiceName(speaker) {
       if (!speaker) return '未知音色'
-      return this.voiceMap[speaker] || speaker
+      // 先按映射返回
+      const name = this.voiceMap[speaker]
+      if (name) return name
+      // 若是用户专属声音，显示“我的声音”
+      if (this.myVoiceId && speaker === this.myVoiceId) return '我的声音'
+      // 否则返回原始 value
+      return speaker
     },
     toggleTextExpand(index) {
       // Vue 3 响应式更新
@@ -279,6 +313,11 @@ export default defineComponent({
       if (!text) return false
       // 判断文本是否超过两行（大约80个字符）
       return text.length > 80
+    },
+    playItem(index, it) {
+      if (!it || !it.audio_url) return
+      // 仅在交互后赋值 src
+      this.loadedSrcs = { ...this.loadedSrcs, [index]: it.audio_url }
     },
     formatDate(dateStr) {
       if (!dateStr) return '未知时间'

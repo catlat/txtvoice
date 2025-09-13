@@ -43,12 +43,12 @@
       <div class="max-h-80 overflow-auto p-2">
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
           <div v-for="opt in filteredOptions" :key="opt.value" class="relative border rounded-[calc(var(--radius,8px)+4px)] border-gray-200 p-3 hover:bg-gray-50 transition cursor-pointer" :class="selectedCardClass(opt)" @click="choose(opt)">
-            <div v-if="localValue===opt.value" class="absolute top-2 left-2 size-4 rounded-full flex items-center justify-center" :class="selectedBadgeClass(opt)">
+            <div v-if="localValue===opt.value" class="absolute -top-1 -left-1 size-4 rounded-full flex items-center justify-center ring-2 ring-white z-10" :class="selectedBadgeClass(opt)">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-3 text-white" fill="currentColor">
                 <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
               </svg>
             </div>
-            <div class="flex items-start justify-between gap-2">
+            <div class="flex items-start justify-between gap-2 pt-0.5 pl-0.5">
               <div class="min-w-0 flex-1">
                 <div class="text-sm truncate flex items-center gap-1" :class="{'font-medium': selectedValue===opt.value}">
                   <span class="truncate">{{ opt.label }}</span>
@@ -134,12 +134,12 @@
       <div class="max-h-80 overflow-auto p-2">
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
           <div v-for="opt in filteredOptions" :key="opt.value" class="relative border rounded-[calc(var(--radius,8px)+4px)] border-gray-200 p-3 hover:bg-gray-50 transition cursor-pointer" :class="selectedCardClass(opt)" @click="choose(opt)">
-            <div v-if="localValue===opt.value" class="absolute top-2 left-2 size-4 rounded-full flex items-center justify-center" :class="selectedBadgeClass(opt)">
+            <div v-if="localValue===opt.value" class="absolute -top-1 -left-1 size-4 rounded-full flex items-center justify-center ring-2 ring-white z-10" :class="selectedBadgeClass(opt)">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-3 text-white" fill="currentColor">
                 <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
               </svg>
             </div>
-            <div class="flex items-start justify-between gap-2">
+            <div class="flex items-start justify-between gap-2 pt-0.5 pl-0.5">
               <div class="min-w-0 flex-1">
                 <div class="text-sm truncate flex items-center gap-1" :class="{'font-medium': selectedValue===opt.value}">
                   <span class="truncate">{{ opt.label }}</span>
@@ -194,6 +194,8 @@ export default defineComponent({
     options: { type: Array, default: () => defaultOptions },
     inline: { type: Boolean, default: false },
     emitOnMount: { type: Boolean, default: false },
+    // 允许从外部注入一些置顶的选项（例如“我的声音”）
+    prependOptions: { type: Array, default: () => [] },
   },
   emits: ['update:modelValue','selected'],
   data() {
@@ -201,7 +203,7 @@ export default defineComponent({
       open: false,
       keyword: '',
       localValue: this.modelValue || (this.options[0] && this.options[0].value),
-      allOptions: this.options.slice(),
+      allOptions: ([]).concat(this.prependOptions || [], this.options || []),
       selectedScene: '全部',
       genderFilter: '全部',
       ageFilter: '全部',
@@ -240,17 +242,20 @@ export default defineComponent({
     },
     sceneOptions() {
       const set = new Set()
-      this.allOptions.forEach(o => { if (o.scene) set.add(o.scene) })
+      const list = this.getFacetSource('scene')
+      list.forEach(o => { if (o.scene) set.add(o.scene) })
       return Array.from(set)
     },
     genderOptions() {
       const set = new Set()
-      this.allOptions.forEach(o => { if (o.gender) set.add(o.gender) })
+      const list = this.getFacetSource('gender')
+      list.forEach(o => { if (o.gender) set.add(o.gender) })
       return Array.from(set)
     },
     ageOptions() {
       const set = new Set()
-      this.allOptions.forEach(o => { if (o.age) set.add(o.age) })
+      const list = this.getFacetSource('age')
+      list.forEach(o => { if (o.age) set.add(o.age) })
       return Array.from(set)
     },
     filteredOptions() {
@@ -292,6 +297,30 @@ export default defineComponent({
     try { if (this.audio) { this.audio.pause(); this.audio.src = '' } } catch (e) {}
   },
   methods: {
+    getFacetSource(excludeKey) {
+      let list = this.allOptions
+      // 关键词过滤始终参与（更贴近“真实可见内容”）
+      if (this.keyword) {
+        const k = this.keyword.toLowerCase()
+        list = list.filter(o => (
+          (o.label && o.label.toLowerCase().includes(k)) ||
+          (o.value && String(o.value).toLowerCase().includes(k)) ||
+          (o.scene && String(o.scene).toLowerCase().includes(k)) ||
+          (o.gender && String(o.gender).toLowerCase().includes(k)) ||
+          (o.age && String(o.age).toLowerCase().includes(k))
+        ))
+      }
+      if (excludeKey !== 'scene' && this.selectedScene && this.selectedScene !== '全部') {
+        list = list.filter(o => (o.scene || '') === this.selectedScene)
+      }
+      if (excludeKey !== 'gender' && this.genderFilter && this.genderFilter !== '全部') {
+        list = list.filter(o => (o.gender || '') === this.genderFilter)
+      }
+      if (excludeKey !== 'age' && this.ageFilter && this.ageFilter !== '全部') {
+        list = list.filter(o => (o.age || '') === this.ageFilter)
+      }
+      return list
+    },
     emitSelectedForCurrent() {
       const found = (this.allOptions || []).find(o => o.value === this.localValue)
       if (found) this.$emit('selected', { value: found.value, label: found.label, gender: found.gender })
@@ -367,14 +396,15 @@ export default defineComponent({
     },
     playAndSelect(opt) {},
     async tryLoadRemote() {
-      // 支持从 /voices.json 全量导入（放在 public 目录）
+      // 支持从 /voices.normalized.json 全量导入（放在 public 目录）
       try {
-        const res = await fetch('/voices.json', { cache: 'no-store' })
+        const res = await fetch('/voices.normalized.json', { cache: 'no-store' })
         if (!res.ok) return
         const json = await res.json()
         const normalized = this.normalizeVoices(json)
         if (normalized.length) {
-          this.allOptions = normalized
+          // 远端数据前拼接外部注入项
+          this.allOptions = ([]).concat(this.prependOptions || [], normalized)
           if (!this.allOptions.find(o => o.value === this.localValue)) {
             this.localValue = this.allOptions[0].value
             this.$emit('update:modelValue', this.localValue)
